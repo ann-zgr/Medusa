@@ -111,7 +111,7 @@ class MedusaModelABC(nn.Module):
         self.medusa_head = nn.ModuleList(
             [
                 nn.Sequential(
-                    *([ResBlock(self.hidden_size)] * medusa_num_layers),
+                    *([ResBlock(self.hidden_size) for _ in range(medusa_num_layers)]),
                     nn.Linear(self.hidden_size, self.vocab_size, bias=False),
                 )
                 for _ in range(medusa_num_heads)
