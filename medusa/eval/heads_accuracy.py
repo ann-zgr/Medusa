@@ -158,7 +158,7 @@ if __name__ == "__main__":
                         help="Whether to load the dataset from HuggingFace instead of local file.")
     parser.add_argument("--dataset_name", type=str, default="tatsu-lab/alpaca_eval",
                         help="Name of the dataset on HuggingFace (used when use_huggingface=True).")
-    parser.add_argument("--save_dir", type=str, default="../../data",
+    parser.add_argument("--save_dir", type=str, default="./accuracy_data",
                         help="Directory to save the results.")
     parser.add_argument("--steps", type=int, default=20,
                         help="Number of steps to run the model.")
