@@ -125,6 +125,7 @@ class MedusaModelABC(nn.Module):
     def from_pretrained(
         cls,
         pretrained_model_name_or_path,
+        medusa_num_heads,
         *args,
         **kwargs,
     ):
@@ -381,6 +382,7 @@ class MedusaModel():
     def from_pretrained(
         cls,
         pretrained_model_name_or_path,
+        medusa_num_heads,
         *args,
         **kwargs,
     ):
@@ -396,6 +398,7 @@ class MedusaModel():
         if config.model_type == "llama":
             return MedusaModelLlama.from_pretrained(
                 pretrained_model_name_or_path,
+                medusa_num_heads,
                 *args,
                 **kwargs,
             )
