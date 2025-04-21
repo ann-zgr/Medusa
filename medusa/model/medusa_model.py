@@ -226,16 +226,8 @@ class MedusaModelABC(nn.Module):
         if output_orig:
             return torch.stack(medusa_logits, dim=0), outputs, orig
         return torch.stack(medusa_logits, dim=0)
-    
-    def get_medusa_choice(self, num_heads=4):
-        if num_heads == 1:
-            return vicuna_7b_1
-        elif num_heads == 2:
-            return vicuna_7b_2
-        elif num_heads == 3:
-            return vicuna_7b_3
-        return vicuna_7b_3
 
+    
     def get_all_medusa_choices(self):
         return {
             2: vicuna_7b_1,
@@ -320,12 +312,15 @@ class MedusaModelABC(nn.Module):
 
         for idx in range(max_steps):
             # Choose number of heads dynamically
-            current_k = random.randint(2,5) # replace with adaptive policy
+            current_k = random.randint(2,5) # replace with adaptive entropy based policy
+
+            # get correct medusa buffers
             medusa_buffers = self.adaptive_medusa_buffers[current_k]
 
             # Slice only needed heads for this step (no recompute)
             medusa_logits = medusa_logits_all[:current_k]
 
+            # make sure we're using the correct medusa attn mask
             medusa_attn_mask = medusa_buffers["medusa_attn_mask"]
 
             # Generate candidates using current k's retrieve/tree layout
