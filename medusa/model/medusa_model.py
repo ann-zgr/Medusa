@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from .modeling_llama_kv import LlamaForCausalLM as KVLlamaForCausalLM
 from .modeling_mistral_kv import MistralForCausalLM as KVMistralForCausalLM
+import random
 # import transformers
 
 # # monkey patch
@@ -411,8 +412,8 @@ class MedusaModelABC(nn.Module):
             find num_heads_to_use
             """
 
+            num_heads_to_use = random.randint(1, 4)
 
-            
             
             # Get the appropriate buffers for this number of heads
             current_buffers = self.get_medusa_buffers(num_heads_to_use)
