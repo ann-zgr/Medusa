@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from .modeling_llama_kv import LlamaForCausalLM as KVLlamaForCausalLM
 from .modeling_mistral_kv import MistralForCausalLM as KVMistralForCausalLM
+import random
 # import transformers
 
 # # monkey patch
@@ -30,7 +31,7 @@ class MedusaConfig(PretrainedConfig):
 
     def __init__(
         self,
-        medusa_num_heads=5,
+        medusa_num_heads=4,
         medusa_num_layers=1,
         base_model_name_or_path="lmsys/vicuna-7b-v1.3",
         **kwargs,
@@ -116,7 +117,7 @@ class MedusaModelABC(nn.Module):
         self.hidden_size = config.hidden_size
         self.vocab_size = config.vocab_size
         self.medusa = medusa_num_heads  # Store the actual number of active heads
-        self.max_medusa_heads = 5  # Maximum number of heads supported
+        self.max_medusa_heads = 4  # Maximum number of heads supported
         self.medusa_num_layers = medusa_num_layers
         self.base_model_name_or_path = base_model_name_or_path
         self.tokenizer = AutoTokenizer.from_pretrained(self.base_model_name_or_path)
@@ -133,6 +134,29 @@ class MedusaModelABC(nn.Module):
                 )
             else:
                 self.medusa_head.append(NoneModule())
+        
+        # Initialize and cache medusa buffers for different head configurations
+        self.cached_medusa_buffers = {}
+        self.cached_medusa_choices = {}
+        
+        # Initialize all available choices from medusa_choices.py
+        self._init_medusa_choices()
+
+    def _init_medusa_choices(self):
+        """Initialize and cache all available medusa choices and their buffers."""
+        # Cache choices for different head configurations
+        self.cached_medusa_choices = {
+            1: vicuna_7b_1,
+            2: vicuna_7b_2,
+            3: vicuna_7b_3,
+            4: vicuna_7b_4,
+        }
+        
+        # Pre-generate buffers for each configuration
+        for num_heads, choices in self.cached_medusa_choices.items():
+            self.cached_medusa_buffers[num_heads] = generate_medusa_buffers(
+                choices, device=self.base_model.device
+            )
 
     # Add a link named base_model to self
     @property
@@ -166,7 +190,7 @@ class MedusaModelABC(nn.Module):
             if medusa_num_heads is not None:
                 base_model_config.medusa_num_heads = medusa_num_heads
             else:
-                base_model_config.medusa_num_heads = 5  # Default to 5 heads
+                base_model_config.medusa_num_heads = 4  # Default to 4 heads
             base_model_config.medusa_num_layers = config.medusa_num_layers
             model = super().from_pretrained(
                 config.base_model_name_or_path,
@@ -258,18 +282,39 @@ class MedusaModelABC(nn.Module):
             return torch.stack(medusa_logits, dim=0), outputs, orig
         return torch.stack(medusa_logits, dim=0)
         
-    def get_medusa_choice(self, model_name):
-        if 'vicuna' in model_name:
-            if '7b' in model_name:
-                return vicuna_7b_stage2
-            elif '13b' in model_name:
-                return vicuna_13b_stage2
-            elif '33b' in model_name:
-                return vicuna_33b_stage2
-        elif 'zephyr' in model_name:
-            return zephyr_stage2
-        warnings.warn('Please specify medusa choice configuration!')
-        return mc_sim_7b_63
+    def get_medusa_choice(self, num_heads=None):
+        """Get the appropriate medusa choice configuration based on number of heads.
+        
+        Args:
+            num_heads (int, optional): Number of heads to use. Defaults to self.medusa.
+            
+        Returns:
+            list: Medusa choice configuration for the specified number of heads.
+        """
+        if num_heads is None:
+            num_heads = self.medusa
+            
+        # Ensure we have a valid number of heads
+        num_heads = min(max(num_heads, 1), 4)  # Clamp between 1 and 4
+        
+        return self.cached_medusa_choices[num_heads]
+        
+    def get_medusa_buffers(self, num_heads=None):
+        """Get the cached medusa buffers for the specified number of heads.
+        
+        Args:
+            num_heads (int, optional): Number of heads to use. Defaults to self.medusa.
+            
+        Returns:
+            dict: Medusa buffers for the specified number of heads.
+        """
+        if num_heads is None:
+            num_heads = self.medusa
+            
+        # Ensure we have a valid number of heads
+        num_heads = min(max(num_heads, 1), 4)  # Clamp between 1 and 4
+        
+        return self.cached_medusa_buffers[num_heads]
 
     def medusa_generate(
         self,
@@ -309,18 +354,15 @@ class MedusaModelABC(nn.Module):
 
         # Cache medusa buffers (the fixed patterns for tree attention)
         if medusa_choices is None:
-            medusa_choices = self.get_medusa_choice(self.base_model_name_or_path)
-
-        if hasattr(self, "medusa_choices") and self.medusa_choices == medusa_choices:
-            # Load the cached medusa buffer
-            medusa_buffers = self.medusa_buffers
+            # Use maximum number of heads (4) for candidate generation
+            medusa_choices = self.get_medusa_choice(4)
+            # Get the corresponding buffers
+            medusa_buffers = self.get_medusa_buffers(4)
         else:
-            # Initialize the medusa buffer
+            # If custom choices are provided, generate buffers for them
             medusa_buffers = generate_medusa_buffers(
                 medusa_choices, device=self.base_model.device
             )
-        self.medusa_buffers = medusa_buffers
-        self.medusa_choices = medusa_choices
 
         # Initialize the past key and value states
         if hasattr(self, "past_key_values"):
@@ -351,7 +393,7 @@ class MedusaModelABC(nn.Module):
         last_round_token = 0
 
         for idx in range(max_steps):
-            # Generate candidates with topk predictions from Medusa heads
+            # Generate candidates with topk predictions from Medusa heads (always use max heads)
             candidates, tree_candidates = generate_candidates(
                 medusa_logits,
                 logits,
@@ -365,19 +407,33 @@ class MedusaModelABC(nn.Module):
                 fast=fast,
             )
 
-            # Use tree attention to verify the candidates and get predictions
+            """
+            TODO
+            find num_heads_to_use
+            """
+
+            num_heads_to_use = random.randint(1, 4)
+
+            
+            # Get the appropriate buffers for this number of heads
+            current_buffers = self.get_medusa_buffers(num_heads_to_use)
+
+            truncated_tree_candidates = tree_candidates[:, :num_heads_to_use]
+
+            # Use tree attention with the appropriate number of heads to verify the candidates
             medusa_logits, logits, outputs = tree_decoding(
                 self,
-                tree_candidates,
+                truncated_tree_candidates,
                 past_key_values,
-                medusa_buffers["medusa_position_ids"],
+                current_buffers["medusa_position_ids"],  # Use buffers matching our head count
                 input_ids,
-                medusa_buffers["retrieve_indices"],
+                current_buffers["retrieve_indices"],     # Use buffers matching our head count
             )
 
             # Evaluate the posterior of the candidates to select the accepted candidate prefix
             best_candidate, accept_length = evaluate_posterior(
                 logits, candidates, temperature, posterior_threshold, posterior_alpha, top_p=top_p, sampling=sampling, fast=fast
+
             )
 
             # Update the input_ids and logits
