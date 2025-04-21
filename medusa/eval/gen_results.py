@@ -17,7 +17,48 @@ def get_node_expectation(accuracies, node):
         expectation *= accuracies[i, node[i]]
     return expectation
 
+# def explore_graph(accuracies, max_depth, max_child, num_iterations):
+#     explored_nodes = {}
+#     accept_nodes = [tuple([0])]
+#     expectations = get_node_expectation(accuracies, accept_nodes[0])
+#     explored_nodes[tuple(accept_nodes[0])] = expectations
+    
+#     for _ in range(num_iterations):
+#         # find neighbors
+#         neighbors = []
+#         for node in accept_nodes:
+#             if node[-1] < max_child[len(node) - 1] - 1:
+#                 neighbor = list(copy.deepcopy(node))
+#                 neighbor[-1] = neighbor[-1] + 1
+#                 neighbors.append(neighbor)
+#             if len(node) < max_depth:
+#                 neighbor = list(copy.deepcopy(node))
+#                 neighbor.append(0)
+#                 neighbors.append(neighbor)
+                
+#         # find the best neighbor
+#         best_neighbor = None
+#         best_neighbor_expectation = 0
+#         for neighbor in neighbors:
+#             if tuple(neighbor) in accept_nodes:
+#                 continue
+#             if tuple(neighbor) in explored_nodes:
+#                 neighbor_expectation = explored_nodes[tuple(neighbor)]
+#             else:
+#                 neighbor_expectation = get_node_expectation(accuracies, neighbor)
+#                 explored_nodes[tuple(neighbor)] = neighbor_expectation
+#             if neighbor_expectation > best_neighbor_expectation:
+#                 best_neighbor = neighbor
+#                 best_neighbor_expectation = neighbor_expectation
+#         accept_nodes.append(tuple(best_neighbor))
+#         expectations += best_neighbor_expectation
+        
+#     return accept_nodes
+
 def explore_graph(accuracies, max_depth, max_child, num_iterations):
+    # Make sure max_depth doesn't exceed the number of heads available
+    max_depth = min(max_depth, accuracies.shape[0])
+    
     explored_nodes = {}
     accept_nodes = [tuple([0])]
     expectations = get_node_expectation(accuracies, accept_nodes[0])
@@ -27,10 +68,14 @@ def explore_graph(accuracies, max_depth, max_child, num_iterations):
         # find neighbors
         neighbors = []
         for node in accept_nodes:
+            # Check if we can expand horizontally (add a sibling)
             if node[-1] < max_child[len(node) - 1] - 1:
                 neighbor = list(copy.deepcopy(node))
                 neighbor[-1] = neighbor[-1] + 1
                 neighbors.append(neighbor)
+            
+            # Check if we can expand vertically (add a child)
+            # Only add a child if we haven't reached max_depth
             if len(node) < max_depth:
                 neighbor = list(copy.deepcopy(node))
                 neighbor.append(0)
@@ -50,8 +95,12 @@ def explore_graph(accuracies, max_depth, max_child, num_iterations):
             if neighbor_expectation > best_neighbor_expectation:
                 best_neighbor = neighbor
                 best_neighbor_expectation = neighbor_expectation
-        accept_nodes.append(tuple(best_neighbor))
-        expectations += best_neighbor_expectation
+        
+        if best_neighbor is not None:  # Add this check to handle case where no valid neighbors are found
+            accept_nodes.append(tuple(best_neighbor))
+            expectations += best_neighbor_expectation
+        else:
+            break  # No more valid neighbors to add
         
     return accept_nodes
 

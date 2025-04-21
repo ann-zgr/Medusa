@@ -72,6 +72,18 @@ class ResBlock(nn.Module):
         return x + self.act(self.linear(x))
 
 
+class NoneModule(nn.Module):
+    """
+    A dummy module that returns None.
+    Used to replace unused Medusa heads.
+    """
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, x):
+        return None
+
+
 class MedusaModelABC(nn.Module):
     """The Medusa Language Model Head.
 
@@ -103,34 +115,44 @@ class MedusaModelABC(nn.Module):
         base_model_name_or_path = config._name_or_path
         self.hidden_size = config.hidden_size
         self.vocab_size = config.vocab_size
-        self.medusa = medusa_num_heads
+        self.medusa = medusa_num_heads  # Store the actual number of active heads
+        self.max_medusa_heads = 5  # Maximum number of heads supported
         self.medusa_num_layers = medusa_num_layers
         self.base_model_name_or_path = base_model_name_or_path
         self.tokenizer = AutoTokenizer.from_pretrained(self.base_model_name_or_path)
-        # Create a list of Medusa heads
-        self.medusa_head = nn.ModuleList(
-            [
-                nn.Sequential(
-                    *([ResBlock(self.hidden_size)] * medusa_num_layers),
-                    nn.Linear(self.hidden_size, self.vocab_size, bias=False),
+        
+        # Create a list of Medusa heads - always create max heads but set inactive ones to NoneModule
+        self.medusa_head = nn.ModuleList()
+        for i in range(self.max_medusa_heads):
+            if i < medusa_num_heads:
+                self.medusa_head.append(
+                    nn.Sequential(
+                        *([ResBlock(self.hidden_size)] * medusa_num_layers),
+                        nn.Linear(self.hidden_size, self.vocab_size, bias=False),
+                    )
                 )
-                for _ in range(medusa_num_heads)
-            ]
-        )
+            else:
+                self.medusa_head.append(NoneModule())
+
     # Add a link named base_model to self
     @property
     def base_model(self):
         return self
+    
     @classmethod
     def from_pretrained(
         cls,
         pretrained_model_name_or_path,
+        medusa_num_heads=None,
         *args,
         **kwargs,
     ):
         # Manually load config to ensure that the medusa_num_heads parameter is loaded
         try:
             config = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+            # Override config with provided medusa_num_heads if specified
+            if medusa_num_heads is not None:
+                config.medusa_num_heads = medusa_num_heads
             return super().from_pretrained(
                 pretrained_model_name_or_path,
                 *args,
@@ -140,7 +162,11 @@ class MedusaModelABC(nn.Module):
         except:
             config = MedusaConfig.from_pretrained(pretrained_model_name_or_path)
             base_model_config = AutoConfig.from_pretrained(config.base_model_name_or_path)
-            base_model_config.medusa_num_heads = 5 # TODO: fix the uploaded config (only include 2 heads)
+            # Override with provided medusa_num_heads if specified, otherwise use default
+            if medusa_num_heads is not None:
+                base_model_config.medusa_num_heads = medusa_num_heads
+            else:
+                base_model_config.medusa_num_heads = 5  # Default to 5 heads
             base_model_config.medusa_num_layers = config.medusa_num_layers
             model = super().from_pretrained(
                 config.base_model_name_or_path,
@@ -148,13 +174,25 @@ class MedusaModelABC(nn.Module):
                 **kwargs,
                 config=base_model_config,
             )
+            
+            # Load Medusa head weights
             medusa_head_path = os.path.join(pretrained_model_name_or_path, "medusa_lm_head.pt")
             if os.path.exists(medusa_head_path):
                 filename = medusa_head_path
             else:
                 filename = hf_hub_download(pretrained_model_name_or_path, "medusa_lm_head.pt")
+            
             medusa_head_state_dict = torch.load(filename, map_location=model.device)
-            model.medusa_head.load_state_dict(medusa_head_state_dict, strict=False)
+            
+            # Only load state dict for active heads
+            active_state_dict = {}
+            for k, v in medusa_head_state_dict.items():
+                # Check if this parameter belongs to an active head
+                head_idx = int(k.split('.')[0])
+                if head_idx < model.medusa:
+                    active_state_dict[k] = v
+            
+            model.medusa_head.load_state_dict(active_state_dict, strict=False)
             return model
         
 
@@ -213,12 +251,13 @@ class MedusaModelABC(nn.Module):
         # Clone the output hidden states
         hidden_states = outputs[0].clone()
         medusa_logits = []
-        # TODO: Consider parallelizing this loop for efficiency?
+        # Only loop through active medusa heads
         for i in range(self.medusa):
             medusa_logits.append(self.medusa_head[i](hidden_states))
         if output_orig:
             return torch.stack(medusa_logits, dim=0), outputs, orig
         return torch.stack(medusa_logits, dim=0)
+        
     def get_medusa_choice(self, model_name):
         if 'vicuna' in model_name:
             if '7b' in model_name:
@@ -381,6 +420,7 @@ class MedusaModel():
     def from_pretrained(
         cls,
         pretrained_model_name_or_path,
+        medusa_num_heads=None,
         *args,
         **kwargs,
     ):
@@ -396,12 +436,14 @@ class MedusaModel():
         if config.model_type == "llama":
             return MedusaModelLlama.from_pretrained(
                 pretrained_model_name_or_path,
+                medusa_num_heads,
                 *args,
                 **kwargs,
             )
         elif config.model_type == "mistral":
             return MedusaModelMistral.from_pretrained(
                 pretrained_model_name_or_path,
+                medusa_num_heads,
                 *args,
                 **kwargs,
             )
