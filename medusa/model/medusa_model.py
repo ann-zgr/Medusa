@@ -408,22 +408,21 @@ class MedusaModelABC(nn.Module):
 
             """
             TODO
+            find num_heads_to_use
             """
-            
 
-            # Select appropriate number of heads based on accept_length
-            # This determines how many heads we'll use in tree_decoding
-            num_heads_to_use = min(accept_length + 1, 4)
-            if num_heads_to_use < 1:
-                num_heads_to_use = 1  # Minimum 2 heads
+
+            
             
             # Get the appropriate buffers for this number of heads
             current_buffers = self.get_medusa_buffers(num_heads_to_use)
 
+            truncated_tree_candidates = tree_candidates[:, :num_heads_to_use]
+
             # Use tree attention with the appropriate number of heads to verify the candidates
             medusa_logits, logits, outputs = tree_decoding(
                 self,
-                tree_candidates,
+                truncated_tree_candidates,
                 past_key_values,
                 current_buffers["medusa_position_ids"],  # Use buffers matching our head count
                 input_ids,
