@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from .modeling_llama_kv import LlamaForCausalLM as KVLlamaForCausalLM
 from .modeling_mistral_kv import MistralForCausalLM as KVMistralForCausalLM
-import random
 # import transformers
 
 # # monkey patch
@@ -17,6 +16,7 @@ from transformers import AutoTokenizer, AutoConfig
 import os
 from huggingface_hub import hf_hub_download
 import warnings
+import random
 
 class MedusaConfig(PretrainedConfig):
     """
@@ -31,7 +31,7 @@ class MedusaConfig(PretrainedConfig):
 
     def __init__(
         self,
-        medusa_num_heads=4,
+        medusa_num_heads=5,
         medusa_num_layers=1,
         base_model_name_or_path="lmsys/vicuna-7b-v1.3",
         **kwargs,
@@ -73,18 +73,6 @@ class ResBlock(nn.Module):
         return x + self.act(self.linear(x))
 
 
-class NoneModule(nn.Module):
-    """
-    A dummy module that returns None.
-    Used to replace unused Medusa heads.
-    """
-    def __init__(self):
-        super().__init__()
-    
-    def forward(self, x):
-        return None
-
-
 class MedusaModelABC(nn.Module):
     """The Medusa Language Model Head.
 
@@ -116,67 +104,34 @@ class MedusaModelABC(nn.Module):
         base_model_name_or_path = config._name_or_path
         self.hidden_size = config.hidden_size
         self.vocab_size = config.vocab_size
-        self.medusa = medusa_num_heads  # Store the actual number of active heads
-        self.max_medusa_heads = 4  # Maximum number of heads supported
+        self.medusa = medusa_num_heads
         self.medusa_num_layers = medusa_num_layers
         self.base_model_name_or_path = base_model_name_or_path
         self.tokenizer = AutoTokenizer.from_pretrained(self.base_model_name_or_path)
-        
-        # Create a list of Medusa heads - always create max heads but set inactive ones to NoneModule
-        self.medusa_head = nn.ModuleList()
-        for i in range(self.max_medusa_heads):
-            if i < medusa_num_heads:
-                self.medusa_head.append(
-                    nn.Sequential(
-                        *([ResBlock(self.hidden_size)] * medusa_num_layers),
-                        nn.Linear(self.hidden_size, self.vocab_size, bias=False),
-                    )
+        # Create a list of Medusa heads
+        self.medusa_head = nn.ModuleList(
+            [
+                nn.Sequential(
+                    *([ResBlock(self.hidden_size)] * medusa_num_layers),
+                    nn.Linear(self.hidden_size, self.vocab_size, bias=False),
                 )
-            else:
-                self.medusa_head.append(NoneModule())
-        
-        # Initialize and cache medusa buffers for different head configurations
-        self.cached_medusa_buffers = {}
-        self.cached_medusa_choices = {}
-        
-        # Initialize all available choices from medusa_choices.py
-        self._init_medusa_choices()
-
-    def _init_medusa_choices(self):
-        """Initialize and cache all available medusa choices and their buffers."""
-        # Cache choices for different head configurations
-        self.cached_medusa_choices = {
-            1: vicuna_7b_1,
-            2: vicuna_7b_2,
-            3: vicuna_7b_3,
-            4: vicuna_7b_4,
-        }
-        
-        # Pre-generate buffers for each configuration
-        for num_heads, choices in self.cached_medusa_choices.items():
-            self.cached_medusa_buffers[num_heads] = generate_medusa_buffers(
-                choices, device=self.base_model.device
-            )
-
+                for _ in range(medusa_num_heads)
+            ]
+        )
     # Add a link named base_model to self
     @property
     def base_model(self):
         return self
-    
     @classmethod
     def from_pretrained(
         cls,
         pretrained_model_name_or_path,
-        medusa_num_heads=None,
         *args,
         **kwargs,
     ):
         # Manually load config to ensure that the medusa_num_heads parameter is loaded
         try:
             config = AutoConfig.from_pretrained(pretrained_model_name_or_path)
-            # Override config with provided medusa_num_heads if specified
-            if medusa_num_heads is not None:
-                config.medusa_num_heads = medusa_num_heads
             return super().from_pretrained(
                 pretrained_model_name_or_path,
                 *args,
@@ -186,11 +141,7 @@ class MedusaModelABC(nn.Module):
         except:
             config = MedusaConfig.from_pretrained(pretrained_model_name_or_path)
             base_model_config = AutoConfig.from_pretrained(config.base_model_name_or_path)
-            # Override with provided medusa_num_heads if specified, otherwise use default
-            if medusa_num_heads is not None:
-                base_model_config.medusa_num_heads = medusa_num_heads
-            else:
-                base_model_config.medusa_num_heads = 4  # Default to 4 heads
+            base_model_config.medusa_num_heads = 5 # TODO: fix the uploaded config (only include 2 heads)
             base_model_config.medusa_num_layers = config.medusa_num_layers
             model = super().from_pretrained(
                 config.base_model_name_or_path,
@@ -198,25 +149,13 @@ class MedusaModelABC(nn.Module):
                 **kwargs,
                 config=base_model_config,
             )
-            
-            # Load Medusa head weights
             medusa_head_path = os.path.join(pretrained_model_name_or_path, "medusa_lm_head.pt")
             if os.path.exists(medusa_head_path):
                 filename = medusa_head_path
             else:
                 filename = hf_hub_download(pretrained_model_name_or_path, "medusa_lm_head.pt")
-            
             medusa_head_state_dict = torch.load(filename, map_location=model.device)
-            
-            # Only load state dict for active heads
-            active_state_dict = {}
-            for k, v in medusa_head_state_dict.items():
-                # Check if this parameter belongs to an active head
-                head_idx = int(k.split('.')[0])
-                if head_idx < model.medusa:
-                    active_state_dict[k] = v
-            
-            model.medusa_head.load_state_dict(active_state_dict, strict=False)
+            model.medusa_head.load_state_dict(medusa_head_state_dict, strict=False)
             return model
         
 
@@ -237,6 +176,7 @@ class MedusaModelABC(nn.Module):
         output_orig=False,
         position_ids=None,
         medusa_forward=False,
+        medusa_attn_mask=None,
         **kwargs,
     ):
         """Forward pass of the MedusaModel.
@@ -262,10 +202,15 @@ class MedusaModelABC(nn.Module):
                 **kwargs,
             )
         with torch.inference_mode():
-            # Pass input through the base model
+            if medusa_forward:
+                # Set Medusa attention mask directly on the model for internal use
+                self.base_model.model.medusa_mask = medusa_attn_mask
+            else:
+                self.base_model.model.medusa_mask = None
+
             outputs = self.base_model.model(
                 input_ids=input_ids,
-                attention_mask=attention_mask,
+                attention_mask=attention_mask if not medusa_forward else None,
                 past_key_values=past_key_values,
                 position_ids=position_ids,
                 **kwargs,
@@ -275,47 +220,21 @@ class MedusaModelABC(nn.Module):
         # Clone the output hidden states
         hidden_states = outputs[0].clone()
         medusa_logits = []
-        # Only loop through active medusa heads
+        # TODO: Consider parallelizing this loop for efficiency?
         for i in range(self.medusa):
             medusa_logits.append(self.medusa_head[i](hidden_states))
         if output_orig:
             return torch.stack(medusa_logits, dim=0), outputs, orig
         return torch.stack(medusa_logits, dim=0)
-        
-    def get_medusa_choice(self, num_heads=None):
-        """Get the appropriate medusa choice configuration based on number of heads.
-        
-        Args:
-            num_heads (int, optional): Number of heads to use. Defaults to self.medusa.
-            
-        Returns:
-            list: Medusa choice configuration for the specified number of heads.
-        """
-        if num_heads is None:
-            num_heads = self.medusa
-            
-        # Ensure we have a valid number of heads
-        num_heads = min(max(num_heads, 1), 4)  # Clamp between 1 and 4
-        
-        return self.cached_medusa_choices[num_heads]
-        
-    def get_medusa_buffers(self, num_heads=None):
-        """Get the cached medusa buffers for the specified number of heads.
-        
-        Args:
-            num_heads (int, optional): Number of heads to use. Defaults to self.medusa.
-            
-        Returns:
-            dict: Medusa buffers for the specified number of heads.
-        """
-        if num_heads is None:
-            num_heads = self.medusa
-            
-        # Ensure we have a valid number of heads
-        num_heads = min(max(num_heads, 1), 4)  # Clamp between 1 and 4
-        
-        return self.cached_medusa_buffers[num_heads]
 
+    
+    def get_all_medusa_choices(self):
+        return {
+            2: vicuna_7b_1,
+            3: vicuna_7b_2,
+            4: vicuna_7b_3,
+            5: vicuna_7b_4,
+        }
     def medusa_generate(
         self,
         input_ids,
@@ -352,17 +271,14 @@ class MedusaModelABC(nn.Module):
         # Avoid modifying the input_ids in-place
         input_ids = input_ids.clone()
 
-        # Cache medusa buffers (the fixed patterns for tree attention)
-        if medusa_choices is None:
-            # Use maximum number of heads (4) for candidate generation
-            medusa_choices = self.get_medusa_choice(4)
-            # Get the corresponding buffers
-            medusa_buffers = self.get_medusa_buffers(4)
-        else:
-            # If custom choices are provided, generate buffers for them
-            medusa_buffers = generate_medusa_buffers(
-                medusa_choices, device=self.base_model.device
-            )
+        medusa_choices_map = self.get_all_medusa_choices()
+
+        # Precompute all relevant buffers
+        if not hasattr(self, "adaptive_medusa_buffers"):
+            self.adaptive_medusa_buffers = {
+                h: generate_medusa_buffers(medusa_choices_map[h], device=self.base_model.device)
+                for h in medusa_choices_map
+            }
 
         # Initialize the past key and value states
         if hasattr(self, "past_key_values"):
@@ -385,15 +301,29 @@ class MedusaModelABC(nn.Module):
 
         reset_medusa_mode(self)
         # Initialize tree attention mask and process prefill tokens
-        medusa_logits, logits = initialize_medusa(
-            input_ids, self, medusa_buffers["medusa_attn_mask"], past_key_values
+        max_heads = self.medusa
+        initial_buffers = self.adaptive_medusa_buffers[max_heads]
+        medusa_logits_all, logits = initialize_medusa(
+            input_ids, self, initial_buffers["medusa_attn_mask"], past_key_values
         )
 
         new_token = 0
         last_round_token = 0
 
         for idx in range(max_steps):
-            # Generate candidates with topk predictions from Medusa heads (always use max heads)
+            # Choose number of heads dynamically
+            current_k = random.randint(2,5) # replace with adaptive entropy based policy
+
+            # get correct medusa buffers
+            medusa_buffers = self.adaptive_medusa_buffers[current_k]
+
+            # Slice only needed heads for this step (no recompute)
+            medusa_logits = medusa_logits_all[:current_k]
+
+            # make sure we're using the correct medusa attn mask
+            medusa_attn_mask = medusa_buffers["medusa_attn_mask"]
+
+            # Generate candidates using current k's retrieve/tree layout
             candidates, tree_candidates = generate_candidates(
                 medusa_logits,
                 logits,
@@ -407,37 +337,27 @@ class MedusaModelABC(nn.Module):
                 fast=fast,
             )
 
-            """
-            TODO
-            find num_heads_to_use
-            """
-
-            num_heads_to_use = random.randint(1, 4)
-
-            
-            # Get the appropriate buffers for this number of heads
-            current_buffers = self.get_medusa_buffers(num_heads_to_use)
-
-            truncated_tree_candidates = tree_candidates[:, :num_heads_to_use]
-
-            # Use tree attention with the appropriate number of heads to verify the candidates
-            medusa_logits, logits, outputs = tree_decoding(
+            # Decode using tree layout for current k
+            medusa_logits_all, logits, outputs = tree_decoding(
                 self,
-                truncated_tree_candidates,
+                tree_candidates,
                 past_key_values,
-                current_buffers["medusa_position_ids"],  # Use buffers matching our head count
+                medusa_buffers["medusa_position_ids"],
                 input_ids,
-                current_buffers["retrieve_indices"],     # Use buffers matching our head count
+                medusa_buffers["retrieve_indices"],
+                medusa_attn_mask=medusa_attn_mask, 
             )
 
-            # Evaluate the posterior of the candidates to select the accepted candidate prefix
+            # Slice medusa_logits for current k
+            medusa_logits = medusa_logits_all[:current_k]
+
+            # Decide how many tokens to accept
             best_candidate, accept_length = evaluate_posterior(
                 logits, candidates, temperature, posterior_threshold, posterior_alpha, top_p=top_p, sampling=sampling, fast=fast
-
             )
 
-            # Update the input_ids and logits
-            input_ids, logits, medusa_logits, new_token = update_inference_inputs(
+            # Update inputs and KV
+            input_ids, logits, medusa_logits_all, new_token = update_inference_inputs(
                 input_ids,
                 candidates,
                 best_candidate,
@@ -445,7 +365,7 @@ class MedusaModelABC(nn.Module):
                 medusa_buffers["retrieve_indices"],
                 outputs,
                 logits,
-                medusa_logits,
+                medusa_logits_all,
                 new_token,
                 past_key_values_data,
                 current_length_data,
@@ -463,7 +383,6 @@ class MedusaModelABC(nn.Module):
             if self.tokenizer.eos_token_id in input_ids[0, input_len:]:
                 break
 
-
 class MedusaModelLlama(MedusaModelABC, KVLlamaForCausalLM):
     pass
 
@@ -476,7 +395,6 @@ class MedusaModel():
     def from_pretrained(
         cls,
         pretrained_model_name_or_path,
-        medusa_num_heads=None,
         *args,
         **kwargs,
     ):
@@ -492,14 +410,12 @@ class MedusaModel():
         if config.model_type == "llama":
             return MedusaModelLlama.from_pretrained(
                 pretrained_model_name_or_path,
-                medusa_num_heads,
                 *args,
                 **kwargs,
             )
         elif config.model_type == "mistral":
             return MedusaModelMistral.from_pretrained(
                 pretrained_model_name_or_path,
-                medusa_num_heads,
                 *args,
                 **kwargs,
             )

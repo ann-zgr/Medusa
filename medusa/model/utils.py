@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn.functional as F
 
@@ -314,6 +313,7 @@ def tree_decoding(
     medusa_position_ids,
     input_ids,
     retrieve_indices,
+    medusa_attn_mask=None,
 ):
     """
     Decode the tree candidates using the provided model and reorganize the logits.
@@ -341,6 +341,7 @@ def tree_decoding(
         past_key_values=past_key_values,
         position_ids=position_ids,
         medusa_forward=True,
+        medusa_attn_mask=medusa_attn_mask,
     )
     
     # Reorder the obtained logits based on the retrieve_indices to ensure consistency with some reference ordering.
