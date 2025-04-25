@@ -461,14 +461,6 @@ if __name__ == "__main__":
         help="The posterior alpha for medusa sampling.",
     )
 
-    parser.add_argument(
-        "--medusa-choices",
-        type=str,
-        default="mc_sim_7b_63",
-        help="The medusa choices for medusa sampling.",
-    )
-
-
 
 
     args = parser.parse_args()
