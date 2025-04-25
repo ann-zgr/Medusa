@@ -100,6 +100,7 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
         input_id = outputs.logits[:, -1:].argmax(dim=-1)
         outputs = model.base_model(input_id, use_cache=True, past_key_values = past_key_values)
         input_ids = torch.cat([input_ids, input_id], dim=-1)
+        new_token += 1
 
         if tokenizer.eos_token_id in input_ids[0, input_len:].tolist():
             break
