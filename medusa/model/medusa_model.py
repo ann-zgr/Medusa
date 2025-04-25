@@ -175,6 +175,7 @@ class MedusaModelABC(nn.Module):
         output_orig=False,
         position_ids=None,
         medusa_forward=False,
+        medusa_attn_mask=None,
         **kwargs,
     ):
         """Forward pass of the MedusaModel.
