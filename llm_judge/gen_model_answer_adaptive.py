@@ -15,7 +15,7 @@ from fastchat.llm_judge.common import load_questions, temperature_config
 from fastchat.model import get_conversation_template
 
 # Medusa imports
-from medusa.model.medusa_model import MedusaModel
+from medusa.model.medusa_model_adaptive import MedusaModel
 from medusa.model.medusa_choices import *
 
 def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, posterior_threshold, posterior_alpha, top_p=0.8, sampling='typical', fast=True, max_steps=512):

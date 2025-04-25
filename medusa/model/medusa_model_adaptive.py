@@ -312,7 +312,8 @@ class MedusaModelABC(nn.Module):
 
         for idx in range(max_steps):
             # Choose number of heads dynamically
-            current_k = random.randint(2,5) # replace with adaptive entropy based policy
+            #current_k = random.randint(2,5) # replace with adaptive entropy based policy
+            current_k = 4 # to check for regression against standard medusa
 
             # get correct medusa buffers
             medusa_buffers = self.adaptive_medusa_buffers[current_k]
