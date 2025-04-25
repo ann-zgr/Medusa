@@ -16,6 +16,7 @@ from transformers import AutoTokenizer, AutoConfig
 import os
 from huggingface_hub import hf_hub_download
 import warnings
+import random
 
 class MedusaConfig(PretrainedConfig):
     """
@@ -175,6 +176,7 @@ class MedusaModelABC(nn.Module):
         output_orig=False,
         position_ids=None,
         medusa_forward=False,
+        medusa_attn_mask=None,
         **kwargs,
     ):
         """Forward pass of the MedusaModel.
@@ -200,10 +202,15 @@ class MedusaModelABC(nn.Module):
                 **kwargs,
             )
         with torch.inference_mode():
-            # Pass input through the base model
+            if medusa_forward:
+                # Set Medusa attention mask directly on the model for internal use
+                self.base_model.model.medusa_mask = medusa_attn_mask
+            else:
+                self.base_model.model.medusa_mask = None
+
             outputs = self.base_model.model(
                 input_ids=input_ids,
-                attention_mask=attention_mask,
+                attention_mask=attention_mask if not medusa_forward else None,
                 past_key_values=past_key_values,
                 position_ids=position_ids,
                 **kwargs,
@@ -219,19 +226,15 @@ class MedusaModelABC(nn.Module):
         if output_orig:
             return torch.stack(medusa_logits, dim=0), outputs, orig
         return torch.stack(medusa_logits, dim=0)
-    def get_medusa_choice(self, model_name):
-        if 'vicuna' in model_name:
-            if '7b' in model_name:
-                return vicuna_7b_stage2
-            elif '13b' in model_name:
-                return vicuna_13b_stage2
-            elif '33b' in model_name:
-                return vicuna_33b_stage2
-        elif 'zephyr' in model_name:
-            return zephyr_stage2
-        warnings.warn('Please specify medusa choice configuration!')
-        return mc_sim_7b_63
 
+    
+    def get_all_medusa_choices(self):
+        return {
+            2: vicuna_7b_1,
+            3: vicuna_7b_2,
+            4: vicuna_7b_3,
+            5: vicuna_7b_4,
+        }
     def medusa_generate(
         self,
         input_ids,
@@ -268,20 +271,14 @@ class MedusaModelABC(nn.Module):
         # Avoid modifying the input_ids in-place
         input_ids = input_ids.clone()
 
-        # Cache medusa buffers (the fixed patterns for tree attention)
-        if medusa_choices is None:
-            medusa_choices = self.get_medusa_choice(self.base_model_name_or_path)
+        medusa_choices_map = self.get_all_medusa_choices()
 
-        if hasattr(self, "medusa_choices") and self.medusa_choices == medusa_choices:
-            # Load the cached medusa buffer
-            medusa_buffers = self.medusa_buffers
-        else:
-            # Initialize the medusa buffer
-            medusa_buffers = generate_medusa_buffers(
-                medusa_choices, device=self.base_model.device
-            )
-        self.medusa_buffers = medusa_buffers
-        self.medusa_choices = medusa_choices
+        # Precompute all relevant buffers
+        if not hasattr(self, "adaptive_medusa_buffers"):
+            self.adaptive_medusa_buffers = {
+                h: generate_medusa_buffers(medusa_choices_map[h], device=self.base_model.device)
+                for h in medusa_choices_map
+            }
 
         # Initialize the past key and value states
         if hasattr(self, "past_key_values"):
@@ -304,15 +301,29 @@ class MedusaModelABC(nn.Module):
 
         reset_medusa_mode(self)
         # Initialize tree attention mask and process prefill tokens
-        medusa_logits, logits = initialize_medusa(
-            input_ids, self, medusa_buffers["medusa_attn_mask"], past_key_values
+        max_heads = self.medusa
+        initial_buffers = self.adaptive_medusa_buffers[max_heads]
+        medusa_logits_all, logits = initialize_medusa(
+            input_ids, self, initial_buffers["medusa_attn_mask"], past_key_values
         )
 
         new_token = 0
         last_round_token = 0
 
         for idx in range(max_steps):
-            # Generate candidates with topk predictions from Medusa heads
+            # Choose number of heads dynamically
+            current_k = random.randint(2,5) # replace with adaptive entropy based policy
+
+            # get correct medusa buffers
+            medusa_buffers = self.adaptive_medusa_buffers[current_k]
+
+            # Slice only needed heads for this step (no recompute)
+            medusa_logits = medusa_logits_all[:current_k]
+
+            # make sure we're using the correct medusa attn mask
+            medusa_attn_mask = medusa_buffers["medusa_attn_mask"]
+
+            # Generate candidates using current k's retrieve/tree layout
             candidates, tree_candidates = generate_candidates(
                 medusa_logits,
                 logits,
@@ -326,23 +337,27 @@ class MedusaModelABC(nn.Module):
                 fast=fast,
             )
 
-            # Use tree attention to verify the candidates and get predictions
-            medusa_logits, logits, outputs = tree_decoding(
+            # Decode using tree layout for current k
+            medusa_logits_all, logits, outputs = tree_decoding(
                 self,
                 tree_candidates,
                 past_key_values,
                 medusa_buffers["medusa_position_ids"],
                 input_ids,
                 medusa_buffers["retrieve_indices"],
+                medusa_attn_mask=medusa_attn_mask, 
             )
 
-            # Evaluate the posterior of the candidates to select the accepted candidate prefix
+            # Slice medusa_logits for current k
+            medusa_logits = medusa_logits_all[:current_k]
+
+            # Decide how many tokens to accept
             best_candidate, accept_length = evaluate_posterior(
                 logits, candidates, temperature, posterior_threshold, posterior_alpha, top_p=top_p, sampling=sampling, fast=fast
             )
 
-            # Update the input_ids and logits
-            input_ids, logits, medusa_logits, new_token = update_inference_inputs(
+            # Update inputs and KV
+            input_ids, logits, medusa_logits_all, new_token = update_inference_inputs(
                 input_ids,
                 candidates,
                 best_candidate,
@@ -350,7 +365,7 @@ class MedusaModelABC(nn.Module):
                 medusa_buffers["retrieve_indices"],
                 outputs,
                 logits,
-                medusa_logits,
+                medusa_logits_all,
                 new_token,
                 past_key_values_data,
                 current_length_data,
@@ -367,7 +382,6 @@ class MedusaModelABC(nn.Module):
 
             if self.tokenizer.eos_token_id in input_ids[0, input_len:]:
                 break
-
 
 class MedusaModelLlama(MedusaModelABC, KVLlamaForCausalLM):
     pass
