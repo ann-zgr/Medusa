@@ -17,11 +17,78 @@ from fastchat.model import get_conversation_template
 # Medusa imports
 from medusa.model.medusa_model_adaptive import MedusaModel
 from medusa.model.medusa_choices import *
+from medusa.model.utils import *
+from medusa.model.kv_cache import initialize_past_key_values
+
+# def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, posterior_threshold, posterior_alpha, top_p=0.8, sampling='typical', fast=True, max_steps=512):
+#     """
+#     Forward pass using Medusa's adaptive decoding strategy.
+#     Uses the new adaptive medusa_generate method which dynamically switches between different head counts.
+    
+#     Args:
+#         input_ids: Input token IDs
+#         model: Medusa model
+#         tokenizer: Tokenizer for the model
+#         medusa_choices: Tree structures for Medusa decoding
+#         temperature: Temperature for sampling
+#         posterior_threshold: Threshold for posterior validation
+#         posterior_alpha: Another threshold parameter
+#         top_p: Top-p for nucleus sampling
+#         sampling: Sampling strategy ('typical' or 'nucleus')
+#         fast: Whether to use fast decoding
+#         max_steps: Maximum number of decoding steps
+        
+#     Returns:
+#         Tuple of (output_ids, new_token_count, steps_taken)
+#     """
+#     assert input_ids.shape[0] == 1, "Only support batch size 1 for now!!"
+    
+#     # Clone input_ids to avoid modifying the original
+#     input_ids = input_ids.clone()
+#     input_len = input_ids.shape[1]
+    
+#     # Use the adaptive medusa_generate method
+#     generation_iter = model.medusa_generate(
+#         input_ids=input_ids,
+#         attention_mask=None,
+#         temperature=temperature,
+#         max_steps=max_steps,
+#         medusa_choices=medusa_choices,
+#         posterior_threshold=posterior_threshold,
+#         posterior_alpha=posterior_alpha,
+#         top_p=top_p,
+#         sampling=sampling,
+#         fast=fast
+#     )
+    
+#     # Track generation progress
+#     steps = 0
+#     last_text = ""
+    
+#     # Run the generation
+#     for step_idx, output in enumerate(generation_iter):
+#         steps = step_idx
+#         last_text = output["text"]
+        
+#         # Check for EOS token in the text (optional, the generator should handle this)
+#         if tokenizer.eos_token in last_text:
+#             break
+        
+#         # Safety check for max steps
+#         if step_idx >= max_steps - 1:
+#             break
+    
+#     # Count how many new tokens were generated
+#     new_token_count = len(tokenizer.encode(last_text, add_special_tokens=False))
+    
+#     # The input_ids were modified in-place by medusa_generate
+#     # We need to return the final state of input_ids
+#     return input_ids, new_token_count, steps
 
 def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, posterior_threshold, posterior_alpha, top_p=0.8, sampling='typical', fast=True, max_steps=512):
     """
     Forward pass using Medusa's adaptive decoding strategy.
-    Uses the new adaptive medusa_generate method which dynamically switches between different head counts.
+    Directly implements adaptive decoding logic similar to the original version.
     
     Args:
         input_ids: Input token IDs
@@ -41,47 +108,115 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
     """
     assert input_ids.shape[0] == 1, "Only support batch size 1 for now!!"
     
-    # Clone input_ids to avoid modifying the original
+    # Avoid modifying the input_ids in-place
     input_ids = input_ids.clone()
+
+    # Get medusa choices map from the model
+    medusa_choices_map = model.get_all_medusa_choices()
+    
+    # Precompute all relevant buffers if not already cached
+    if not hasattr(model, "adaptive_medusa_buffers"):
+        model.adaptive_medusa_buffers = {
+            h: generate_medusa_buffers(medusa_choices_map[h], device=model.base_model.device)
+            for h in medusa_choices_map
+        }
+
+    # Initialize the past key and value states
+    if hasattr(model, "past_key_values"):
+        past_key_values = model.past_key_values
+        past_key_values_data = model.past_key_values_data
+        current_length_data = model.current_length_data
+        # Reset the past key and value states
+        current_length_data.zero_()
+    else:
+        (
+            past_key_values,
+            past_key_values_data,
+            current_length_data,
+        ) = initialize_past_key_values(model.base_model)
+        model.past_key_values = past_key_values
+        model.past_key_values_data = past_key_values_data
+        model.current_length_data = current_length_data
+
     input_len = input_ids.shape[1]
+
+    reset_medusa_mode(model)
     
-    # Use the adaptive medusa_generate method
-    generation_iter = model.medusa_generate(
-        input_ids=input_ids,
-        attention_mask=None,
-        temperature=temperature,
-        max_steps=max_steps,
-        medusa_choices=medusa_choices,
-        posterior_threshold=posterior_threshold,
-        posterior_alpha=posterior_alpha,
-        top_p=top_p,
-        sampling=sampling,
-        fast=fast
+    # Initialize with maximum number of heads for initial processing
+    max_heads = model.medusa
+    initial_buffers = model.adaptive_medusa_buffers[max_heads]
+    
+    # Process prefill tokens and initialize
+    medusa_logits_all, logits = initialize_medusa(
+        input_ids, model, initial_buffers["medusa_attn_mask"], past_key_values
     )
+
+    new_token = 0
     
-    # Track generation progress
-    steps = 0
-    last_text = ""
-    
-    # Run the generation
-    for step_idx, output in enumerate(generation_iter):
-        steps = step_idx
-        last_text = output["text"]
+    # Main generation loop
+    for idx in range(max_steps):
+        # Choose number of heads dynamically
+        # For fixed head count for testing:
+        current_k = 4  # Could be replaced with adaptive head selection logic
         
-        # Check for EOS token in the text (optional, the generator should handle this)
-        if tokenizer.eos_token in last_text:
-            break
+        # Get buffers for current head count
+        medusa_buffers = model.adaptive_medusa_buffers[current_k]
         
-        # Safety check for max steps
-        if step_idx >= max_steps - 1:
+        # Slice only the logits needed for this iteration
+        medusa_logits = medusa_logits_all[:current_k]
+        
+        # Generate candidates using current tree structure
+        candidates, tree_candidates = generate_candidates(
+            medusa_logits,
+            logits,
+            medusa_buffers["tree_indices"],
+            medusa_buffers["retrieve_indices"],
+            temperature, posterior_threshold, posterior_alpha, top_p, sampling, fast
+        )
+        
+        # Tree decoding with appropriate attention mask for current head count
+        medusa_logits_all, logits, outputs = tree_decoding(
+            model,
+            tree_candidates,
+            past_key_values,
+            medusa_buffers["medusa_position_ids"],
+            input_ids,
+            medusa_buffers["retrieve_indices"],
+            medusa_attn_mask=medusa_buffers["medusa_attn_mask"]
+        )
+        
+        # Slice medusa_logits for current head count
+        medusa_logits = medusa_logits_all[:current_k]
+        
+        # Determine which tokens to accept
+        best_candidate, accept_length = evaluate_posterior(
+            logits, candidates, temperature, posterior_threshold, posterior_alpha, top_p, sampling, fast
+        )
+        
+        # Update input_ids and related state variables
+        input_ids, logits, medusa_logits_all, new_token = update_inference_inputs(
+            input_ids,
+            candidates,
+            best_candidate,
+            accept_length,
+            medusa_buffers["retrieve_indices"],
+            outputs,
+            logits,
+            medusa_logits_all,
+            new_token,
+            past_key_values_data,
+            current_length_data,
+        )
+        
+        # Check for EOS token
+        if tokenizer.eos_token_id in input_ids[0, input_len:].tolist():
             break
-    
-    # Count how many new tokens were generated
-    new_token_count = len(tokenizer.encode(last_text, add_special_tokens=False))
-    
-    # The input_ids were modified in-place by medusa_generate
-    # We need to return the final state of input_ids
-    return input_ids, new_token_count, steps
+            
+        # Safety check for max tokens
+        if new_token > 1024:
+            break
+            
+    return input_ids, new_token, idx
 
 def run_eval(
     model_path,
