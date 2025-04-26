@@ -302,6 +302,8 @@ def get_model_answers(
                     
                     output_ids = output_ids[0][len(input_ids[0]) :]
 
+                    print("Output ids")
+                    print(output_ids)
                     # be consistent with the template's stop_token_ids
                     if conv.stop_token_ids:
                         stop_token_ids_index = [
