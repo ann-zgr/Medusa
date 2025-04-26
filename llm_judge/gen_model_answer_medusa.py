@@ -65,10 +65,10 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
     )
     new_token = 0
 
-    # print("Init MEDUSA LOGITS: ")
-    # print(medusa_logits)
-    # print("Size")
-    # print(medusa_logits.size())
+    print("Init MEDUSA LOGITS: ")
+    print(medusa_logits)
+    print("Size")
+    print(medusa_logits.size())
     # print("Init LOGITS: ")
     # print(logits)
     
@@ -96,8 +96,8 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
                 input_ids,
                 medusa_buffers["retrieve_indices"],
             )
-        # print("Tree Decoding MEDUSA_LOGITS: ")
-        # print(medusa_logits)
+        print("Tree Decoding MEDUSA_LOGITS: ")
+        print(medusa_logits)
         # print("Tree Decoding LOGITS: ")
         # print(logits)
         # print("Tree Decoding OUTPUTS: ")
@@ -130,8 +130,8 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
         # print(input_ids)
         # print("Update_inf LOGITS: ")
         # print(logits)
-        # print("Update_inf MEDUSA_LOGITS: ")
-        # print(medusa_logits)
+        print("Update_inf MEDUSA_LOGITS: ")
+        print(medusa_logits)
         # print("Update_inf NEW_TOKEN: ")
         # print(new_token)
     
