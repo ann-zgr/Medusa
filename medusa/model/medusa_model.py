@@ -219,7 +219,10 @@ class MedusaModelABC(nn.Module):
             medusa_logits.append(self.medusa_head[i](hidden_states))
         if output_orig:
             return torch.stack(medusa_logits, dim=0), outputs, orig
+        print(torch.stack(medusa_logits, dim=0))
         return torch.stack(medusa_logits, dim=0)
+    
+
     def get_medusa_choice(self, model_name):
         if 'vicuna' in model_name:
             if '7b' in model_name:
