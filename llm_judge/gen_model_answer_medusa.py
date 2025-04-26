@@ -43,8 +43,8 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
     model.medusa_buffers = medusa_buffers
     model.medusa_choices = medusa_choices
     print("After")
-    print(model.medusa_buffers)
-    print(model.medusa_choices)
+    #print(model.medusa_buffers)
+    #print(model.medusa_choices)
 
     # Initialize the past key and value states
     if hasattr(model, "past_key_values"):
@@ -336,7 +336,7 @@ def get_model_answers(
                     sampling=sampling,
                     fast = fast,
                 )
-                print(output_ids)
+                #print(output_ids)
                 torch.cuda.synchronize()
                 total_time = time.time() - start_time
                 output_ids = output_ids[0][len(input_ids[0]) :]
