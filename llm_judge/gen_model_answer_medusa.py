@@ -67,12 +67,14 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
 
     print("Init MEDUSA LOGITS: ")
     print(medusa_logits)
+    print("Size")
+    print(medusa_logits.size())
     print("Init LOGITS: ")
     print(logits)
     
     for idx in range(max_steps): 
-        print("Size")
-        print(medusa_logits.size())
+        # print("Size")
+        # print(medusa_logits.size())
         candidates, tree_candidates = generate_candidates(
                 medusa_logits,
                 logits,
@@ -81,10 +83,10 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
                 temperature, posterior_threshold, posterior_alpha, top_p, sampling, fast
             )
         
-        print("generate_candidates CANDIDATES: ")
-        print(candidates)
-        print("generate_candidates TREE CANDIDATES: ")
-        print(tree_candidates)
+        # print("generate_candidates CANDIDATES: ")
+        # print(candidates)
+        # print("generate_candidates TREE CANDIDATES: ")
+        # print(tree_candidates)
 
         medusa_logits, logits, outputs = tree_decoding(
                 model,
@@ -94,22 +96,22 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
                 input_ids,
                 medusa_buffers["retrieve_indices"],
             )
-        print("Tree Decoding MEDUSA_LOGITS: ")
-        print(medusa_logits)
-        print("Tree Decoding LOGITS: ")
-        print(logits)
-        print("Tree Decoding OUTPUTS: ")
-        print(logits)
+        # print("Tree Decoding MEDUSA_LOGITS: ")
+        # print(medusa_logits)
+        # print("Tree Decoding LOGITS: ")
+        # print(logits)
+        # print("Tree Decoding OUTPUTS: ")
+        # print(logits)
 
 
         best_candidate, accept_length = evaluate_posterior(
                 logits, candidates, temperature, posterior_threshold, posterior_alpha , top_p, sampling, fast
             )
         
-        print("Evaluate Posterior BEST CANDIDATE: ")
-        print(best_candidate)
-        print("Evaluate Posterior ACCEPT LENGTH: ")
-        print(accept_length)
+        # print("Evaluate Posterior BEST CANDIDATE: ")
+        # print(best_candidate)
+        # print("Evaluate Posterior ACCEPT LENGTH: ")
+        # print(accept_length)
 
         input_ids, logits, medusa_logits, new_token = update_inference_inputs(
                 input_ids,
@@ -124,14 +126,14 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
                 past_key_values_data,
                 current_length_data,
             )
-        print("Update_inf INPUT_IDS: ")
-        print(input_ids)
-        print("Update_inf LOGITS: ")
-        print(logits)
-        print("Update_inf MEDUSA_LOGITS: ")
-        print(medusa_logits)
-        print("Update_inf NEW_TOKEN: ")
-        print(new_token)
+        # print("Update_inf INPUT_IDS: ")
+        # print(input_ids)
+        # print("Update_inf LOGITS: ")
+        # print(logits)
+        # print("Update_inf MEDUSA_LOGITS: ")
+        # print(medusa_logits)
+        # print("Update_inf NEW_TOKEN: ")
+        # print(new_token)
     
         if tokenizer.eos_token_id in input_ids[0, input_len:].tolist():
             break
