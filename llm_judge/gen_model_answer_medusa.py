@@ -271,24 +271,52 @@ def get_model_answers(
         device_map="auto"
     )
 
-    print("Model architecture after initialize_medusa:")
-    print(f"Model type: {type(model)}")
-    print(f"Base model type: {type(model.base_model)}")
+    # print("Model architecture after initialize_medusa:")
+    # print(f"Model type: {type(model)}")
+    # print(f"Base model type: {type(model.base_model)}")
     
-    # More detailed logging of model structure
-    print("Model structure:")
-    for name, module in model.named_modules():
-        print(f"Layer: {name}, Type: {type(module)}")
+    # # More detailed logging of model structure
+    # print("Model structure:")
+    # for name, module in model.named_modules():
+    #     print(f"Layer: {name}, Type: {type(module)}")
     
-    # If you want to see parameters and their shapes
-    print("Model parameters:")
-    for name, param in model.named_parameters():
-        print(f"Parameter: {name}, Shape: {param.shape}")
+    # # If you want to see parameters and their shapes
+    # print("Model parameters:")
+    # for name, param in model.named_parameters():
+    #     print(f"Parameter: {name}, Shape: {param.shape}")
         
-    # You can also print specific attributes that might be relevant
-    print("Model config:")
-    if hasattr(model, "config"):
-        print(model.config)
+    # # You can also print specific attributes that might be relevant
+    # print("Model config:")
+    # if hasattr(model, "config"):
+    #     print(model.config)
+
+    # Add this after your existing logging code
+    print("\nMedusa Head Weight Statistics:")
+    for i in range(5):
+        # Get weights from each head
+        linear_weights = model.medusa_head[i][0].linear.weight
+        output_weights = model.medusa_head[i][1].weight
+        
+        # Calculate statistics
+        linear_mean = linear_weights.mean().item()
+        linear_std = linear_weights.std().item()
+        linear_min = linear_weights.min().item()
+        linear_max = linear_weights.max().item()
+        
+        output_mean = output_weights.mean().item()
+        output_std = output_weights.std().item()
+        output_min = output_weights.min().item()
+        output_max = output_weights.max().item()
+        
+        print(f"\nHead {i} Statistics:")
+        print(f"  ResBlock Linear Weight - mean: {linear_mean:.6f}, std: {linear_std:.6f}, min: {linear_min:.6f}, max: {linear_max:.6f}")
+        print(f"  Output Linear Weight   - mean: {output_mean:.6f}, std: {output_std:.6f}, min: {output_min:.6f}, max: {output_max:.6f}")
+
+    # You can also check if the weight patterns look different
+    print("\nWeight Pattern Samples (first 5 values from each head's output layer):")
+    for i in range(5):
+        sample = model.medusa_head[i][1].weight[0, :5].tolist()
+        print(f"Head {i} output weight sample: {sample}")
 
     tokenizer = model.get_tokenizer()
     
