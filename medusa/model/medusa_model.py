@@ -161,6 +161,7 @@ class MedusaModelABC(nn.Module):
                 filename = hf_hub_download(pretrained_model_name_or_path, "medusa_lm_head.pt")
             medusa_head_state_dict = torch.load(filename, map_location=model.device)
             model.medusa_head.load_state_dict(medusa_head_state_dict, strict=False)
+            print(f"State dictionary keys: {list(medusa_head_state_dict.keys())}")
             return model
         
 
