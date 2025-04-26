@@ -403,7 +403,9 @@ class MedusaModel():
             base_model_config = AutoConfig.from_pretrained(config.base_model_name_or_path)
             config.model_type = base_model_config.model_type
 
+        print("here before llama")
         if config.model_type == "llama":
+            print("here in llama")
             return MedusaModelLlama.from_pretrained(
                 pretrained_model_name_or_path,
                 *args,
