@@ -145,8 +145,9 @@ class MedusaModelABC(nn.Module):
             print(config.to_dict())
             base_model_config = AutoConfig.from_pretrained(config.base_model_name_or_path)
             print(base_model_config.to_dict())
-            base_model_config.medusa_num_heads = 5 # TODO: fix the uploaded config (only include 2 heads)
+            #base_model_config.medusa_num_heads = 5 # TODO: fix the uploaded config (only include 2 heads)
             #base_model_config.medusa_num_heads = 4
+            base_model_config.medusa_num_heads = 2
             base_model_config.medusa_num_layers = config.medusa_num_layers
             model = super().from_pretrained(
                 config.base_model_name_or_path,
@@ -156,12 +157,15 @@ class MedusaModelABC(nn.Module):
             )
             medusa_head_path = os.path.join(pretrained_model_name_or_path, "medusa_lm_head.pt")
             if os.path.exists(medusa_head_path):
+                print("LOCAL")
                 filename = medusa_head_path
             else:
+                print("HUGGINFACE")
                 filename = hf_hub_download(pretrained_model_name_or_path, "medusa_lm_head.pt")
             medusa_head_state_dict = torch.load(filename, map_location=model.device)
+            print(f"Loaded keys from medusa_lm_head.pt: {list(medusa_head_state_dict.keys())}")
             model.medusa_head.load_state_dict(medusa_head_state_dict, strict=False)
-            print(f"State dictionary keys: {list(medusa_head_state_dict.keys())}")
+      
             return model
         
 
