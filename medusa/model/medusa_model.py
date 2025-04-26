@@ -131,6 +131,8 @@ class MedusaModelABC(nn.Module):
         # Manually load config to ensure that the medusa_num_heads parameter is loaded
         try:
             config = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+            print("AUTO")
+            print(config.to_dict())
             return super().from_pretrained(
                 pretrained_model_name_or_path,
                 *args,
@@ -138,8 +140,11 @@ class MedusaModelABC(nn.Module):
                 config=config,
             )
         except:
+            print("EXCEPT")
             config = MedusaConfig.from_pretrained(pretrained_model_name_or_path)
+            print(config.to_dict())
             base_model_config = AutoConfig.from_pretrained(config.base_model_name_or_path)
+            print(base_model_config.to_dict())
             base_model_config.medusa_num_heads = 5 # TODO: fix the uploaded config (only include 2 heads)
             base_model_config.medusa_num_layers = config.medusa_num_layers
             model = super().from_pretrained(

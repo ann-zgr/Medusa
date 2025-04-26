@@ -65,12 +65,12 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
     )
     new_token = 0
 
-    print("Init MEDUSA LOGITS: ")
-    print(medusa_logits)
-    print("Size")
-    print(medusa_logits.size())
-    print("Init LOGITS: ")
-    print(logits)
+    # print("Init MEDUSA LOGITS: ")
+    # print(medusa_logits)
+    # print("Size")
+    # print(medusa_logits.size())
+    # print("Init LOGITS: ")
+    # print(logits)
     
     for idx in range(max_steps): 
         # print("Size")
