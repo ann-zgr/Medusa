@@ -248,6 +248,7 @@ def get_model_answers(
                     sampling=sampling,
                     fast = fast,
                 )
+                print(output_ids)
                 torch.cuda.synchronize()
                 total_time = time.time() - start_time
                 output_ids = output_ids[0][len(input_ids[0]) :]
