@@ -40,9 +40,6 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
         medusa_buffers = generate_medusa_buffers(
             medusa_choices, device=model.base_model.device
         )
-    print("Before")
-    print(model.medusa_buffers)
-    print(model.medusa_choices)
     model.medusa_buffers = medusa_buffers
     model.medusa_choices = medusa_choices
     print("After")
