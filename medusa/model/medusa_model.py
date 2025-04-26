@@ -193,6 +193,7 @@ class MedusaModelABC(nn.Module):
             (Optional) Original predictions from the base model's LM head.
         """
         if not medusa_forward:
+            print("Not medusa forward")
             return super().forward(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
