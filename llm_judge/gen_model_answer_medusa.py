@@ -65,6 +65,27 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
 
     input_len = input_ids.shape[1]
     reset_medusa_mode(model)
+
+
+    print("Model architecture before initialize_medusa:")
+    print(f"Model type: {type(model)}")
+    print(f"Base model type: {type(model.base_model)}")
+    
+    # More detailed logging of model structure
+    print("Model structure:")
+    for name, module in model.named_modules():
+        print(f"Layer: {name}, Type: {type(module)}")
+    
+    # If you want to see parameters and their shapes
+    print("Model parameters:")
+    for name, param in model.named_parameters():
+        print(f"Parameter: {name}, Shape: {param.shape}")
+        
+    # You can also print specific attributes that might be relevant
+    print("Model config:")
+    if hasattr(model, "config"):
+        print(model.config)
+
     medusa_logits, logits = initialize_medusa(
             input_ids, model, medusa_buffers["medusa_attn_mask"], past_key_values
     )
