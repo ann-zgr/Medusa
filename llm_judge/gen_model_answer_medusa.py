@@ -71,6 +71,8 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
     print(logits)
     
     for idx in range(max_steps): 
+        print("Size")
+        print(medusa_logits.size())
         candidates, tree_candidates = generate_candidates(
                 medusa_logits,
                 logits,
