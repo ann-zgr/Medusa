@@ -30,7 +30,6 @@ def main(args):
     
     model = MedusaModel.from_pretrained(
         args.model_path,
-        medusa_num_heads=args.medusa_num_heads,
         torch_dtype=torch.float16,
         low_cpu_mem_usage=True,
         device_map="auto"
