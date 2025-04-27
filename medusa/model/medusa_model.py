@@ -30,7 +30,7 @@ class MedusaConfig(PretrainedConfig):
 
     def __init__(
         self,
-        medusa_num_heads=5,
+        medusa_num_heads=2,
         medusa_num_layers=1,
         base_model_name_or_path="lmsys/vicuna-7b-v1.3",
         **kwargs,
