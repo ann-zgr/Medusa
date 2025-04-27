@@ -36,6 +36,7 @@ class MedusaConfig(PretrainedConfig):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        print("HERE IN MEDUSA CONFIG")
         self.medusa_num_heads = medusa_num_heads
         self.medusa_num_layers = medusa_num_layers
         self.base_model_name_or_path = base_model_name_or_path
