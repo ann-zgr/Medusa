@@ -30,7 +30,7 @@ class MedusaConfig(PretrainedConfig):
 
     def __init__(
         self,
-        medusa_num_heads=3,
+        medusa_num_heads=4,
         medusa_num_layers=1,
         base_model_name_or_path="lmsys/vicuna-7b-v1.5",
         **kwargs,
@@ -148,7 +148,7 @@ class MedusaModelABC(nn.Module):
             print(base_model_config.to_dict())
             #base_model_config.medusa_num_heads = 5 # TODO: fix the uploaded config (only include 2 heads)
             #base_model_config.medusa_num_heads = 4
-            base_model_config.medusa_num_heads = 3
+            base_model_config.medusa_num_heads = 4
             base_model_config.medusa_num_layers = config.medusa_num_layers
             model = super().from_pretrained(
                 config.base_model_name_or_path,

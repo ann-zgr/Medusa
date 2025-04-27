@@ -86,9 +86,9 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
     # if hasattr(model, "config"):
     #     print(model.config)
 
-    medusa_logits, logits = initialize_medusa(
-            input_ids, model, medusa_buffers["medusa_attn_mask"], past_key_values
-    )
+    # medusa_logits, logits = initialize_medusa(
+    #         input_ids, model, medusa_buffers["medusa_attn_mask"], past_key_values
+    # )
 
     medusa_logits, logits = initialize_medusa(
             input_ids, model, medusa_buffers["medusa_attn_mask"], past_key_values
