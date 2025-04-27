@@ -31,11 +31,9 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
 
     # Cache medusa buffers (the fixed patterns for tree attention)
     if hasattr(model, "medusa_choices") and model.medusa_choices == medusa_choices:
-        print(" Load the cached medusa buffer")
         # Load the cached medusa buffer
         medusa_buffers = model.medusa_buffers
     else:
-        print("Initialize medusa buffer")
         # Initialize the medusa buffer
         medusa_buffers = generate_medusa_buffers(
             medusa_choices, device=model.base_model.device
