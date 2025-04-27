@@ -292,7 +292,7 @@ def get_model_answers(
 
     # Add this after your existing logging code
     print("\nMedusa Head Weight Statistics:")
-    for i in range(5):
+    for i in range(2):
         # Get weights from each head
         linear_weights = model.medusa_head[i][0].linear.weight
         output_weights = model.medusa_head[i][1].weight
@@ -312,11 +312,11 @@ def get_model_answers(
         print(f"  ResBlock Linear Weight - mean: {linear_mean:.6f}, std: {linear_std:.6f}, min: {linear_min:.6f}, max: {linear_max:.6f}")
         print(f"  Output Linear Weight   - mean: {output_mean:.6f}, std: {output_std:.6f}, min: {output_min:.6f}, max: {output_max:.6f}")
 
-    # You can also check if the weight patterns look different
-    print("\nWeight Pattern Samples (first 5 values from each head's output layer):")
-    for i in range(5):
-        sample = model.medusa_head[i][1].weight[0, :5].tolist()
-        print(f"Head {i} output weight sample: {sample}")
+    # # You can also check if the weight patterns look different
+    # print("\nWeight Pattern Samples (first 5 values from each head's output layer):")
+    # for i in range(5):
+    #     sample = model.medusa_head[i][1].weight[0, :5].tolist()
+    #     print(f"Head {i} output weight sample: {sample}")
 
     tokenizer = model.get_tokenizer()
     
