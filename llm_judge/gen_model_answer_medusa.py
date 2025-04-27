@@ -42,7 +42,7 @@ def medusa_forward(input_ids, model, tokenizer, medusa_choices, temperature, pos
         )
     model.medusa_buffers = medusa_buffers
     model.medusa_choices = medusa_choices
-    print("After")
+    # print("After")
     #print(model.medusa_buffers)
     #print(model.medusa_choices)
 
@@ -291,26 +291,26 @@ def get_model_answers(
     #     print(model.config)
 
     # Add this after your existing logging code
-    print("\nMedusa Head Weight Statistics:")
-    for i in range(4):
-        # Get weights from each head
-        linear_weights = model.medusa_head[i][0].linear.weight
-        output_weights = model.medusa_head[i][1].weight
+    # print("\nMedusa Head Weight Statistics:")
+    # for i in range(4):
+    #     # Get weights from each head
+    #     linear_weights = model.medusa_head[i][0].linear.weight
+    #     output_weights = model.medusa_head[i][1].weight
         
-        # Calculate statistics
-        linear_mean = linear_weights.mean().item()
-        linear_std = linear_weights.std().item()
-        linear_min = linear_weights.min().item()
-        linear_max = linear_weights.max().item()
+    #     # Calculate statistics
+    #     linear_mean = linear_weights.mean().item()
+    #     linear_std = linear_weights.std().item()
+    #     linear_min = linear_weights.min().item()
+    #     linear_max = linear_weights.max().item()
         
-        output_mean = output_weights.mean().item()
-        output_std = output_weights.std().item()
-        output_min = output_weights.min().item()
-        output_max = output_weights.max().item()
+    #     output_mean = output_weights.mean().item()
+    #     output_std = output_weights.std().item()
+    #     output_min = output_weights.min().item()
+    #     output_max = output_weights.max().item()
         
-        print(f"\nHead {i} Statistics:")
-        print(f"  ResBlock Linear Weight - mean: {linear_mean:.6f}, std: {linear_std:.6f}, min: {linear_min:.6f}, max: {linear_max:.6f}")
-        print(f"  Output Linear Weight   - mean: {output_mean:.6f}, std: {output_std:.6f}, min: {output_min:.6f}, max: {output_max:.6f}")
+    #     print(f"\nHead {i} Statistics:")
+    #     print(f"  ResBlock Linear Weight - mean: {linear_mean:.6f}, std: {linear_std:.6f}, min: {linear_min:.6f}, max: {linear_max:.6f}")
+    #     print(f"  Output Linear Weight   - mean: {output_mean:.6f}, std: {output_std:.6f}, min: {output_min:.6f}, max: {output_max:.6f}")
 
     # # You can also check if the weight patterns look different
     # print("\nWeight Pattern Samples (first 5 values from each head's output layer):")
@@ -321,10 +321,10 @@ def get_model_answers(
     tokenizer = model.get_tokenizer()
     
     model.eval()
-    print('Check model training state:',model.training)
+    # print('Check model training state:',model.training)
     
     cuda_visible_devices = os.environ.get('CUDA_VISIBLE_DEVICES')
-    print('CUDA VISIBLE DEVICES:', cuda_visible_devices)
+    # print('CUDA VISIBLE DEVICES:', cuda_visible_devices)
     
     question = questions[0]
 

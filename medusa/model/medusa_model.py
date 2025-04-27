@@ -132,8 +132,8 @@ class MedusaModelABC(nn.Module):
         # Manually load config to ensure that the medusa_num_heads parameter is loaded
         try:
             config = AutoConfig.from_pretrained(pretrained_model_name_or_path)
-            print("AUTO")
-            print(config.to_dict())
+            #print("AUTO")
+           # print(config.to_dict())
             return super().from_pretrained(
                 pretrained_model_name_or_path,
                 *args,
@@ -141,11 +141,11 @@ class MedusaModelABC(nn.Module):
                 config=config,
             )
         except:
-            print("EXCEPT")
+            #print("EXCEPT")
             config = MedusaConfig.from_pretrained(pretrained_model_name_or_path)
-            print(config.to_dict())
+            #print(config.to_dict())
             base_model_config = AutoConfig.from_pretrained(config.base_model_name_or_path)
-            print(base_model_config.to_dict())
+            #print(base_model_config.to_dict())
             #base_model_config.medusa_num_heads = 5 # TODO: fix the uploaded config (only include 2 heads)
             #base_model_config.medusa_num_heads = 4
             base_model_config.medusa_num_heads = 4
@@ -156,16 +156,16 @@ class MedusaModelABC(nn.Module):
                 **kwargs,
                 config=base_model_config,
             )
-            print("after pretrained")
+            #print("after pretrained")
             medusa_head_path = os.path.join(pretrained_model_name_or_path, "medusa_lm_head.pt")
             if os.path.exists(medusa_head_path):
-                print("LOCAL")
+               # print("LOCAL")
                 filename = medusa_head_path
             else:
-                print("HUGGINFACE")
+                #print("HUGGINFACE")
                 filename = hf_hub_download(pretrained_model_name_or_path, "medusa_lm_head.pt")
             medusa_head_state_dict = torch.load(filename, map_location=model.device)
-            print(f"Loaded keys from medusa_lm_head.pt: {list(medusa_head_state_dict.keys())}")
+            #print(f"Loaded keys from medusa_lm_head.pt: {list(medusa_head_state_dict.keys())}")
             model.medusa_head.load_state_dict(medusa_head_state_dict, strict=False)
       
             return model
@@ -233,7 +233,7 @@ class MedusaModelABC(nn.Module):
             medusa_logits.append(self.medusa_head[i](hidden_states))
         if output_orig:
             return torch.stack(medusa_logits, dim=0), outputs, orig
-        print(torch.stack(medusa_logits, dim=0))
+       # print(torch.stack(medusa_logits, dim=0))
         return torch.stack(medusa_logits, dim=0)
     
 
@@ -411,9 +411,9 @@ class MedusaModel():
             base_model_config = AutoConfig.from_pretrained(config.base_model_name_or_path)
             config.model_type = base_model_config.model_type
 
-        print("here before llama")
+        #print("here before llama")
         if config.model_type == "llama":
-            print("here in llama")
+           # print("here in llama")
             return MedusaModelLlama.from_pretrained(
                 pretrained_model_name_or_path,
                 *args,
