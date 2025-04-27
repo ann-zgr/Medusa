@@ -41,7 +41,7 @@ def main(args):
         print(f"Loading dataset from HuggingFace: {args.dataset_name}")
         try:
             # Load the dataset using HuggingFace datasets
-            dataset = load_dataset(args.dataset_name)
+            dataset = load_dataset(args.dataset_name, trust_remote_code=True)
             
             # Print dataset info
             print(f"Dataset structure: {dataset}")
