@@ -292,7 +292,7 @@ def get_model_answers(
 
     # Add this after your existing logging code
     print("\nMedusa Head Weight Statistics:")
-    for i in range(2):
+    for i in range(8):
         # Get weights from each head
         linear_weights = model.medusa_head[i][0].linear.weight
         output_weights = model.medusa_head[i][1].weight
