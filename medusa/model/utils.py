@@ -501,7 +501,7 @@ def evaluate_posterior(
                 best_candidate = best_candidates[torch.argmax(likelihood)]
             return best_candidate, accept_length
         # Calculate posterior probabilities and thresholds for candidate selection
-        posterior_mask = get_typical_posterior_mask(logits, candidates, temperature, posterior_threshold, posterior_alpha, fast)
+        posterior_mask = get_typical_posterior_mask(logits, candidates, temperature, posterior_threshold, posterior_alpha)
         candidates_accept_length = (torch.cumprod(posterior_mask, dim=1)).sum(dim=1)
         # Choose the best candidate based on the evaluated posterior probabilities
         accept_length = candidates_accept_length.max()
