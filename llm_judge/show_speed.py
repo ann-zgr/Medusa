@@ -16,7 +16,7 @@ def parse_result(data):
         choices = line["choices"]
         for choice in choices:
             tokens +=np.sum(choice["new_tokens"])
-            steps += np.sum(choice["idx"])
+            steps += np.sum(choice["idxs"])
             times += np.sum(choice["wall_time"])
     return tokens, steps, times
 

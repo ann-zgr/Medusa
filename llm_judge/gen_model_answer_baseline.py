@@ -187,7 +187,7 @@ def get_model_answers(
 
     model = MedusaModel.from_pretrained(
         model_path,
-        medusa_num_heads = num_heads,
+        # medusa_num_heads = num_heads,
         torch_dtype=torch.float16,
         low_cpu_mem_usage=True,
         device_map="auto"
