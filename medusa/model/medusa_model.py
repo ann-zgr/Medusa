@@ -157,7 +157,7 @@ class MedusaModelABC(nn.Module):
             else:
                 filename = hf_hub_download(pretrained_model_name_or_path, "medusa_lm_head.pt")
             # medusa_head_state_dict = torch.load(filename, map_location=model.device)
-            medusa_head_state_dict = jt.load(filename, map_location=model.device)
+            medusa_head_state_dict = jt.load(filename)
             model.medusa_head.load_state_dict(medusa_head_state_dict, strict=False)
             return model
         
@@ -204,7 +204,7 @@ class MedusaModelABC(nn.Module):
                 **kwargs,
             )
         # with torch.inference_mode():
-        with jt.inference_mode():
+        with jt.no_grad():
             # Pass input through the base model
             outputs = self.base_model.model(
                 input_ids=input_ids,
