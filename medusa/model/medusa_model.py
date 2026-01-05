@@ -1,5 +1,4 @@
-# import torch
-# import torch.nn as nn
+import torch
 import jittor as jt
 from jittor import nn
 from .modeling_llama_kv import LlamaForCausalLM as KVLlamaForCausalLM
@@ -156,8 +155,7 @@ class MedusaModelABC(nn.Module):
                 filename = medusa_head_path
             else:
                 filename = hf_hub_download(pretrained_model_name_or_path, "medusa_lm_head.pt")
-            # medusa_head_state_dict = torch.load(filename, map_location=model.device)
-            medusa_head_state_dict = jt.load(filename, map_location=model.device)
+            medusa_head_state_dict = torch.load(filename, map_location=model.device)
             model.medusa_head.load_state_dict(medusa_head_state_dict, strict=False)
             return model
         
@@ -203,8 +201,8 @@ class MedusaModelABC(nn.Module):
                 position_ids=position_ids,
                 **kwargs,
             )
-        # with torch.inference_mode():
-        with jt.inference_mode():
+        
+        with torch.inference_mode():
             # Pass input through the base model
             outputs = self.base_model.model(
                 input_ids=input_ids,
@@ -216,9 +214,10 @@ class MedusaModelABC(nn.Module):
             if output_orig:
                 orig = self.base_model.lm_head(outputs[0])
         # Clone the output hidden states
-        hidden_states = outputs[0].clone()
+        hidden_states = jt.from_torch(outputs[0].clone())
         medusa_logits = []
         # TODO: Consider parallelizing this loop for efficiency?
+        self.medusa_head.eval()
         for i in range(self.medusa):
             medusa_logits.append(self.medusa_head[i](hidden_states))
         if output_orig:
