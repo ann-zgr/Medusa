@@ -1,3 +1,9 @@
+### 本仓库为2025年《人工神经网络》大作业的小组工作最终结果，工作主题为复现论文《Medusa: Simple Framework for Accelerating LLM Generation with Multiple Decoding Heads》。
+
+### 仓库主要内容为 MEDUSA 相关代码，结构与 MEDUSA 原仓库相似。其中，使用 Jittor 框架对原模型进行重构复现，复现代码位于 jittor 分支，主要重构部分包括 medusa/model/medusa_model.py 和 medusa/model/utils.py 等。
+
+### 小组成员：张耕睿 黄嘉豪 艾凡
+
 <img src="assets/logo.png" alt="Medusa" width="100" align="left"><div align="center"><h1>&nbsp;Medusa: Simple Framework for Accelerating LLM Generation with Multiple Decoding Heads</h1></div>
 
 <p align="center">
@@ -63,21 +69,26 @@ In the updated version, we add support for full-model training, called Medusa-2 
 We also add support for self-distillation, which allows us to add Medusa to any fine-tuned LLM without requiring the availability of the original training data.
 
 ## Contents
-- [Introduction](#introduction)
-- [Contents](#contents)
-- [Installation](#installation)
-  - [Method 1: With pip (may not be the latest version)](#method-1-with-pip-may-not-be-the-latest-version)
-  - [Method 2: From the source (recommended)](#method-2-from-the-source-recommended)
-  - [Model Weights](#model-weights)
-  - [Inference](#inference)
-  - [Training](#training)
-  - [Training (legacy)](#training-legacy)
-  - [Push to Hugging Face Hub](#push-to-hugging-face-hub)
-- [Citation](#citation)
-- [Codebase Guide](#codebase-guide)
-- [Community Adoption](#community-adoption)
-- [Contributing](#contributing)
-- [Acknowledgements](#acknowledgements)
+1. [Introduction](#introduction)
+2. [Contents](#contents)
+3. [Installation](#installation)
+   1. [Method 1: With pip (may not be the latest version)](#method-1-with-pip-may-not-be-the-latest-version)
+   2. [Method 2: From the source (recommended)](#method-2-from-the-source-recommended)
+   3. [Model Weights](#model-weights)
+      1. [Medusa-1](#medusa-1)
+      2. [Medusa-2](#medusa-2)
+   4. [Inference](#inference)
+   5. [Training](#training)
+   6. [Training on various architectures](#training-on-various-architectures)
+      1. [Prepare the data](#prepare-the-data)
+      2. [Adapt the data to the model you want to enable medusa on.](#adapt-the-data-to-the-model-you-want-to-enable-medusa-on)
+      3. [Train the model](#train-the-model)
+   7. [Push to Hugging Face Hub](#push-to-hugging-face-hub)
+4. [Citation](#citation)
+5. [Codebase Guide](#codebase-guide)
+6. [Community Adoption](#community-adoption)
+7. [Contributing](#contributing)
+8. [Acknowledgements](#acknowledgements)
 
 ## Installation
 ### Method 1: With pip (may not be the latest version)
