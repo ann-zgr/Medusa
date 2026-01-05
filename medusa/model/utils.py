@@ -1,5 +1,7 @@
-import torch
-import torch.nn.functional as F
+# import torch
+# import torch.nn.functional as F
+import jittor as jt
+import jittor.nn.functional as F
 
 TOPK=10 # topk for sparse tree (10 is a placeholder and it is sufficient)
 
@@ -56,7 +58,8 @@ def generate_medusa_buffers(medusa_choices, device="cuda"):
         prev_depth = depth
     
     # Create the attention mask for Medusa
-    medusa_attn_mask = torch.eye(medusa_len, medusa_len)
+    # medusa_attn_mask = torch.eye(medusa_len, medusa_len)
+    medusa_attn_mask = jt.init.eye(medusa_len, medusa_len)
     medusa_attn_mask[:, 0] = 1
     start = 0
     for i in range(len(depth_counts)):
@@ -72,7 +75,8 @@ def generate_medusa_buffers(medusa_choices, device="cuda"):
         start += depth_counts[i]
 
     # Generate tree indices for the Medusa structure
-    medusa_tree_indices = torch.zeros(medusa_len, dtype=torch.long)
+    # medusa_tree_indices = torch.zeros(medusa_len, dtype=torch.long)
+    medusa_tree_indices = jt.zeros(medusa_len, dtype=jt.int64)
     medusa_tree_indices[0] = 0
     start = 0
     for i in range(len(depth_counts)):
@@ -82,7 +86,8 @@ def generate_medusa_buffers(medusa_choices, device="cuda"):
         start += depth_counts[i]
 
     # Generate position IDs for the Medusa structure
-    medusa_position_ids = torch.zeros(medusa_len, dtype=torch.long)
+    # medusa_position_ids = torch.zeros(medusa_len, dtype=torch.long)
+    medusa_position_ids = jt.zeros(medusa_len, dtype=jt.int64)
     start = 0
     for i in range(len(depth_counts)):
         medusa_position_ids[start + 1: start + depth_counts[i] + 1] = i + 1
@@ -103,9 +108,11 @@ def generate_medusa_buffers(medusa_choices, device="cuda"):
         retrieve_indices_nest.append(retrieve_indice)
     max_length = max([len(x) for x in retrieve_indices_nest])
     retrieve_indices = [pad_path(path, max_length) for path in retrieve_indices_nest]
-    retrieve_indices = torch.tensor(retrieve_indices, dtype=torch.long)
+    # retrieve_indices = torch.tensor(retrieve_indices, dtype=torch.long)
+    retrieve_indices = jt.array(retrieve_indices, dtype=jt.int64)
     retrieve_indices = retrieve_indices + 1
-    retrieve_indices = torch.cat([torch.zeros((retrieve_indices.shape[0], 1), dtype=torch.long), retrieve_indices], dim=1)
+    # retrieve_indices = torch.cat([torch.zeros((retrieve_indices.shape[0], 1), dtype=torch.long), retrieve_indices], dim=1)
+    retrieve_indices = jt.contrib.concat([jt.zeros((retrieve_indices.shape[0], 1), dtype=jt.int64), retrieve_indices], dim=1)
 
     # Aggregate the generated buffers into a dictionary
     medusa_buffers = {
@@ -116,10 +123,16 @@ def generate_medusa_buffers(medusa_choices, device="cuda"):
         }
     
     # Move the tensors in the dictionary to the specified device
+    # medusa_buffers = {
+    #     k: v.clone().to(device)
+    #     if isinstance(v, torch.Tensor)
+    #     else torch.tensor(v,  device=device)
+    #     for k, v in medusa_buffers.items()
+    # }
     medusa_buffers = {
         k: v.clone().to(device)
-        if isinstance(v, torch.Tensor)
-        else torch.tensor(v,  device=device)
+        if isinstance(v, jt.Var)
+        else jt.array(v,  device=device)
         for k, v in medusa_buffers.items()
     }
     return medusa_buffers
@@ -210,18 +223,31 @@ def get_nucleus_one_token(logit, temperature, top_p):
     Returns:
         torch.Tensor: A tensor containing the indices of the sampled tokens.
     """
+    # if top_p >= 1:
+    #     return torch.multinomial(F.softmax(logit / temperature, dim=-1), 1)
+    # logit = logit / temperature
+    # probs = torch.softmax(logit, dim=-1)
+    # sorted_logits, sorted_indices = torch.sort(probs, descending=True)
+    # cum_probs = torch.cumsum(sorted_logits, dim=-1)
+    # sorted_indices_to_remove = cum_probs > top_p
+    # sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+    # sorted_indices_to_remove[..., 0] = 0
+    # indices_to_remove = sorted_indices_to_remove.scatter(dim=1, index=sorted_indices, src=sorted_indices_to_remove)
+    # logit[indices_to_remove] = float('-inf')
+    # sampled_tokens = torch.multinomial(F.softmax(logit, dim=-1), 1)
+    # return sampled_tokens
     if top_p >= 1:
-        return torch.multinomial(F.softmax(logit / temperature, dim=-1), 1)
+        return jt.misc.multinomial(F.softmax(logit / temperature, dim=-1), 1)
     logit = logit / temperature
-    probs = torch.softmax(logit, dim=-1)
-    sorted_logits, sorted_indices = torch.sort(probs, descending=True)
-    cum_probs = torch.cumsum(sorted_logits, dim=-1)
+    probs = jt.nn.softmax(logit, dim=-1)
+    sorted_logits, sorted_indices = jt.misc.sort(probs, descending=True)
+    cum_probs = jt.misc.cumsum(sorted_logits, dim=-1)
     sorted_indices_to_remove = cum_probs > top_p
     sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
     sorted_indices_to_remove[..., 0] = 0
     indices_to_remove = sorted_indices_to_remove.scatter(dim=1, index=sorted_indices, src=sorted_indices_to_remove)
     logit[indices_to_remove] = float('-inf')
-    sampled_tokens = torch.multinomial(F.softmax(logit, dim=-1), 1)
+    sampled_tokens = jt.misc.multinomial(F.softmax(logit, dim=-1), 1)
     return sampled_tokens
 
 def get_typical_one_token(logit, temperature, posterior_threshold, posterior_alpha):
@@ -241,18 +267,31 @@ def get_typical_one_token(logit, temperature, posterior_threshold, posterior_alp
     Returns:
         torch.Tensor: A tensor containing the indices of the sampled tokens.
     """
+    # logit = logit / temperature
+    # probs = torch.softmax(logit, dim=-1)
+    # entropy = -torch.sum(
+    #         probs * torch.log(probs + 1e-5), dim=-1
+    #     )
+    # threshold = torch.minimum(
+    #         torch.ones_like(entropy) * posterior_threshold,
+    #         torch.exp(-entropy) * posterior_alpha,
+    #     )
+    # indices_to_remove = probs < threshold.unsqueeze(-1)
+    # logit[indices_to_remove] = float('-inf')
+    # sampled_tokens = torch.multinomial(F.softmax(logit, dim=-1), 1)
+    # return sampled_tokens
     logit = logit / temperature
-    probs = torch.softmax(logit, dim=-1)
-    entropy = -torch.sum(
-            probs * torch.log(probs + 1e-5), dim=-1
+    probs = jt.nn.softmax(logit, dim=-1)
+    entropy = -jt.sum(
+            probs * jt.log(probs + 1e-5), dim=-1
         )
-    threshold = torch.minimum(
-            torch.ones_like(entropy) * posterior_threshold,
-            torch.exp(-entropy) * posterior_alpha,
+    threshold = jt.minimum(
+            jt.ones_like(entropy) * posterior_threshold,
+            jt.exp(-entropy) * posterior_alpha,
         )
     indices_to_remove = probs < threshold.unsqueeze(-1)
     logit[indices_to_remove] = float('-inf')
-    sampled_tokens = torch.multinomial(F.softmax(logit, dim=-1), 1)
+    sampled_tokens = jt.misc.multinomial(F.softmax(logit, dim=-1), 1)
     return sampled_tokens
 
 def generate_candidates(medusa_logits, logits, tree_indices, retrieve_indices, temperature = 0, posterior_threshold=0.3, posterior_alpha = 0.09, top_p=0.8, sampling = 'typical', fast = False):
@@ -278,7 +317,8 @@ def generate_candidates(medusa_logits, logits, tree_indices, retrieve_indices, t
     """
     # Greedy decoding: Select the most probable candidate from the original logits.
     if temperature == 0 or fast:
-        candidates_logit = torch.argmax(logits[:, -1]).unsqueeze(0)
+        # candidates_logit = torch.argmax(logits[:, -1]).unsqueeze(0)
+        candidates_logit = jt.argmax(logits[:, -1]).unsqueeze(0)
     else:
         if sampling == 'typical':
             candidates_logit = get_typical_one_token(logits[:, -1], temperature, posterior_threshold, posterior_alpha).squeeze(0)
@@ -287,16 +327,19 @@ def generate_candidates(medusa_logits, logits, tree_indices, retrieve_indices, t
         else:
             raise NotImplementedError
     # Extract the TOPK candidates from the medusa logits.
-    candidates_medusa_logits = torch.topk(medusa_logits[:, 0, -1], TOPK, dim = -1).indices
+    # candidates_medusa_logits = torch.topk(medusa_logits[:, 0, -1], TOPK, dim = -1).indices
+    candidates_medusa_logits = jt.misc.topk(medusa_logits[:, 0, -1], TOPK, dim = -1).indices
 
     # Combine the selected candidate from the original logits with the topk medusa logits.
-    candidates = torch.cat([candidates_logit, candidates_medusa_logits.view(-1)], dim=-1)
+    # candidates = torch.cat([candidates_logit, candidates_medusa_logits.view(-1)], dim=-1)
+    candidates = jt.contrib.concat([candidates_logit, candidates_medusa_logits.view(-1)], dim=-1)
 
     # Map the combined candidates to the tree indices to get tree candidates.
     tree_candidates = candidates[tree_indices]
 
     # Extend the tree candidates by appending a zero.
-    tree_candidates_ext = torch.cat([tree_candidates, torch.zeros((1), dtype=torch.long, device=tree_candidates.device)], dim=0)
+    # tree_candidates_ext = torch.cat([tree_candidates, torch.zeros((1), dtype=torch.long, device=tree_candidates.device)], dim=0)
+    tree_candidates_ext = jt.contrib.concat([tree_candidates, jt.zeros((1), dtype=jt.int64, device=tree_candidates.device)], dim=0)
 
     # Retrieve the cartesian candidates using the retrieve indices.
     cart_candidates = tree_candidates_ext[retrieve_indices]
@@ -371,17 +414,20 @@ def get_nucleus_posterior_mask(logits, candidates, temperature, top_p):
     n_samples, n_tokens = logits.shape[0], logits.shape[1]
     logits = logits.view(n_samples*n_tokens, -1)
     if top_p >= 1:
-        sampled_tokens = torch.multinomial(F.softmax(logits, dim=-1), 1)
+        # sampled_tokens = torch.multinomial(F.softmax(logits, dim=-1), 1)
+        sampled_tokens = jt.misc.multinomial(F.softmax(logits, dim=-1), 1)
         sampled_tokens = sampled_tokens.view(n_samples, n_tokens)
         posterior_mask = (candidates[:, 1:] == sampled_tokens).int()
         return posterior_mask
     # Convert to probabilities (softmax)
     probs = F.softmax(logits, dim=-1)
     # Sort the probabilities
-    sorted_logits, sorted_indices = torch.sort(probs, descending=True)
+    # sorted_logits, sorted_indices = torch.sort(probs, descending=True)
+    sorted_logits, sorted_indices = jt.misc.sort(probs, descending=True)
 
     # Compute cumulative probabilities
-    cum_probs = torch.cumsum(sorted_logits, dim=-1)
+    # cum_probs = torch.cumsum(sorted_logits, dim=-1)
+    cum_probs = jt.misc.cumsum(sorted_logits, dim=-1)
 
     # Create mask for the top-p nucleus
     sorted_indices_to_remove = cum_probs > top_p
@@ -394,7 +440,8 @@ def get_nucleus_posterior_mask(logits, candidates, temperature, top_p):
     # Remove low-probability tokens
     logits[indices_to_remove] = float('-inf')
     # Sample from the remaining tokens
-    sampled_tokens = torch.multinomial(F.softmax(logits, dim=-1), 1)
+    # sampled_tokens = torch.multinomial(F.softmax(logits, dim=-1), 1)
+    sampled_tokens = jt.misc.multinomial(F.softmax(logits, dim=-1), 1)
     sampled_tokens = sampled_tokens.view(n_samples, n_tokens)
     # Create a mask for selected tokens
     posterior_mask = (candidates[:, 1:] == sampled_tokens).int()
@@ -417,16 +464,24 @@ def get_typical_posterior_mask(logits, candidates, temperature, posterior_thresh
     n_samples, n_tokens = logits.shape[0], logits.shape[1]
     logits = logits.view(n_samples*n_tokens, -1)
     probs = F.softmax(logits, dim=-1)
-    entropy = -torch.sum(
-            probs * torch.log(probs + 1e-5), dim=-1
+    # entropy = -torch.sum(
+    #         probs * torch.log(probs + 1e-5), dim=-1
+    #     )
+    entropy = -jt.sum(
+            probs * jt.log(probs + 1e-5), dim=-1
         )
-    threshold = torch.minimum(
-            torch.ones_like(entropy) * posterior_threshold,
-            torch.exp(-entropy) * posterior_alpha,
+    # threshold = torch.minimum(
+    #         torch.ones_like(entropy) * posterior_threshold,
+    #         torch.exp(-entropy) * posterior_alpha,
+    #     )
+    threshold = jt.minimum(
+            jt.ones_like(entropy) * posterior_threshold,
+            jt.exp(-entropy) * posterior_alpha,
         )
     indices_to_remove = probs < threshold.unsqueeze(-1)
     logits[indices_to_remove] = float('-inf')
-    sampled_tokens = torch.multinomial(F.softmax(logits, dim=-1), 1)
+    # sampled_tokens = torch.multinomial(F.softmax(logits, dim=-1), 1)
+    sampled_tokens = jt.misc.multinomial(F.softmax(logits, dim=-1), 1)
     sampled_tokens = sampled_tokens.view(n_samples, n_tokens)
     posterior_mask = (candidates[:, 1:] == sampled_tokens).int()
     return posterior_mask
@@ -459,72 +514,136 @@ def evaluate_posterior(
     if temperature == 0:
         # Find the tokens that match the maximum logits for each position in the sequence
         posterior_mask = (
-            candidates[:, 1:] == torch.argmax(logits[:, :-1], dim=-1)
+            # candidates[:, 1:] == torch.argmax(logits[:, :-1], dim=-1)
+            candidates[:, 1:] == jt.argmax(logits[:, :-1], dim=-1)
         ).int()
-        candidates_accept_length = (torch.cumprod(posterior_mask, dim=1)).sum(dim=1)
+        # candidates_accept_length = (torch.cumprod(posterior_mask, dim=1)).sum(dim=1)
+        candidates_accept_length = (jt.misc.cumprod(posterior_mask, dim=1)).sum(dim=1)
         accept_length = candidates_accept_length.max()
         # Choose the best candidate
         if accept_length == 0:
             # Default to the first candidate if none are accepted
-            best_candidate = torch.tensor(0, dtype=torch.long, device=candidates.device)
+            # best_candidate = torch.tensor(0, dtype=torch.long, device=candidates.device)
+            best_candidate = jt.var(0, dtype=jt.int64, device=candidates.device)
         else:
-            best_candidate = torch.argmax(candidates_accept_length).to(torch.long)
+            # best_candidate = torch.argmax(candidates_accept_length).to(torch.long)
+            best_candidate = jt.argmax(candidates_accept_length).to(jt.int64)
         return best_candidate, accept_length
         
+    # if sampling == 'typical':
+    #     if fast:
+    #         posterior_prob = torch.softmax(logits[:, :-1] / temperature, dim=-1)
+    #         candidates_prob = torch.gather(
+    #             posterior_prob, dim=-1, index=candidates[:, 1:].unsqueeze(-1)
+    #         ).squeeze(-1)
+    #         posterior_entropy = -torch.sum(
+    #             posterior_prob * torch.log(posterior_prob + 1e-5), dim=-1
+    #         )  # torch.sum(torch.log(*)) is faster than torch.prod
+    #         threshold = torch.minimum(
+    #             torch.ones_like(posterior_entropy) * posterior_threshold,
+    #             torch.exp(-posterior_entropy) * posterior_alpha,
+    #         )
+    #         posterior_mask = candidates_prob > threshold
+    #         candidates_accept_length = (torch.cumprod(posterior_mask, dim=1)).sum(dim=1)
+
+    #         # Choose the best candidate based on the evaluated posterior probabilities
+    #         accept_length = candidates_accept_length.max()
+    #         if accept_length == 0:
+    #             # If no candidates are accepted, just choose the first one
+    #             best_candidate = torch.tensor(0, dtype=torch.long, device=candidates.device)
+    #         else:
+    #             best_candidates = torch.where(candidates_accept_length == accept_length)[0]
+    #             # Accept the best one according to likelihood
+    #             likelihood = torch.sum(
+    #                 torch.log(candidates_prob[best_candidates, :accept_length]), dim=-1
+    #             )
+    #             best_candidate = best_candidates[torch.argmax(likelihood)]
+    #         return best_candidate, accept_length
+    #     # Calculate posterior probabilities and thresholds for candidate selection
+    #     posterior_mask = get_typical_posterior_mask(logits, candidates, temperature, posterior_threshold, posterior_alpha)
+    #     candidates_accept_length = (torch.cumprod(posterior_mask, dim=1)).sum(dim=1)
+    #     # Choose the best candidate based on the evaluated posterior probabilities
+    #     accept_length = candidates_accept_length.max()
+        
+    #     if accept_length == 0:
+    #         # If no candidates are accepted, just choose the first one
+    #         best_candidate = torch.tensor(0, dtype=torch.long, device=candidates.device)
+    #     else:
+    #         best_candidate = torch.argmax(candidates_accept_length).to(torch.long)
+    #         # Accept the best one according to likelihood
+    #     return best_candidate, accept_length
+    
+    # if sampling == 'nucleus':
+    #     assert top_p < 1.0 + 1e-6, "top_p should between 0 and 1"
+    #     posterior_mask = get_nucleus_posterior_mask(logits, candidates, temperature, top_p)
+    #     candidates_accept_length = (torch.cumprod(posterior_mask, dim=1)).sum(dim=1)
+    #     accept_length = candidates_accept_length.max()
+    #     # Choose the best candidate
+    #     if accept_length == 0:
+    #         # Default to the first candidate if none are accepted
+    #         best_candidate = torch.tensor(0, dtype=torch.long, device=candidates.device)
+    #     else:
+    #         best_candidate = torch.argmax(candidates_accept_length).to(torch.long)
+    #     return best_candidate, accept_length
+    # else:
+    #     raise NotImplementedError
     if sampling == 'typical':
         if fast:
-            posterior_prob = torch.softmax(logits[:, :-1] / temperature, dim=-1)
-            candidates_prob = torch.gather(
+            posterior_prob = jt.nn.softmax(logits[:, :-1] / temperature, dim=-1)
+            candidates_prob = jt.misc.gather(
                 posterior_prob, dim=-1, index=candidates[:, 1:].unsqueeze(-1)
             ).squeeze(-1)
-            posterior_entropy = -torch.sum(
-                posterior_prob * torch.log(posterior_prob + 1e-5), dim=-1
+            posterior_entropy = -jt.sum(
+                posterior_prob * jt.log(posterior_prob + 1e-5), dim=-1
             )  # torch.sum(torch.log(*)) is faster than torch.prod
-            threshold = torch.minimum(
-                torch.ones_like(posterior_entropy) * posterior_threshold,
-                torch.exp(-posterior_entropy) * posterior_alpha,
+            threshold = jt.minimum(
+                jt.ones_like(posterior_entropy) * posterior_threshold,
+                jt.exp(-posterior_entropy) * posterior_alpha,
             )
             posterior_mask = candidates_prob > threshold
-            candidates_accept_length = (torch.cumprod(posterior_mask, dim=1)).sum(dim=1)
+            candidates_accept_length = (jt.misc.cumprod(posterior_mask, dim=1)).sum(dim=1)
 
             # Choose the best candidate based on the evaluated posterior probabilities
             accept_length = candidates_accept_length.max()
             if accept_length == 0:
                 # If no candidates are accepted, just choose the first one
-                best_candidate = torch.tensor(0, dtype=torch.long, device=candidates.device)
+                best_candidate = jt.array(0, dtype=jt.int64, device=candidates.device)
             else:
-                best_candidates = torch.where(candidates_accept_length == accept_length)[0]
+                best_candidates = jt.where(candidates_accept_length == accept_length)[0]
                 # Accept the best one according to likelihood
-                likelihood = torch.sum(
-                    torch.log(candidates_prob[best_candidates, :accept_length]), dim=-1
+                likelihood = jt.sum(
+                    jt.log(candidates_prob[best_candidates, :accept_length]), dim=-1
                 )
-                best_candidate = best_candidates[torch.argmax(likelihood)]
+                best_candidate = best_candidates[jt.argmax(likelihood)]
             return best_candidate, accept_length
         # Calculate posterior probabilities and thresholds for candidate selection
         posterior_mask = get_typical_posterior_mask(logits, candidates, temperature, posterior_threshold, posterior_alpha)
-        candidates_accept_length = (torch.cumprod(posterior_mask, dim=1)).sum(dim=1)
+        candidates_accept_length = (jt.misc.cumprod(posterior_mask, dim=1)).sum(dim=1)
         # Choose the best candidate based on the evaluated posterior probabilities
         accept_length = candidates_accept_length.max()
         
         if accept_length == 0:
             # If no candidates are accepted, just choose the first one
-            best_candidate = torch.tensor(0, dtype=torch.long, device=candidates.device)
+            best_candidate = jt.array(0, dtype=jt.int64, device=candidates.device)
         else:
-            best_candidate = torch.argmax(candidates_accept_length).to(torch.long)
+            best_candidate = jt.argmax(candidates_accept_length).to(jt.long)
             # Accept the best one according to likelihood
         return best_candidate, accept_length
     
     if sampling == 'nucleus':
         assert top_p < 1.0 + 1e-6, "top_p should between 0 and 1"
         posterior_mask = get_nucleus_posterior_mask(logits, candidates, temperature, top_p)
-        candidates_accept_length = (torch.cumprod(posterior_mask, dim=1)).sum(dim=1)
+        # candidates_accept_length = (torch.cumprod(posterior_mask, dim=1)).sum(dim=1)
+        candidates_accept_length = (jt.misc.cumprod(posterior_mask, dim=1)).sum(dim=1)
         accept_length = candidates_accept_length.max()
         # Choose the best candidate
         if accept_length == 0:
             # Default to the first candidate if none are accepted
-            best_candidate = torch.tensor(0, dtype=torch.long, device=candidates.device)
+            # best_candidate = torch.tensor(0, dtype=torch.long, device=candidates.device)
+            best_candidate = jt.array(0, dtype=jt.int64, device=candidates.device)
         else:
-            best_candidate = torch.argmax(candidates_accept_length).to(torch.long)
+            # best_candidate = torch.argmax(candidates_accept_length).to(torch.long)
+            best_candidate = jt.argmax(candidates_accept_length).to(jt.int64)
         return best_candidate, accept_length
     else:
         raise NotImplementedError
@@ -568,7 +687,10 @@ def update_inference_inputs(
         retrieve_indices[best_candidate, : accept_length + 1] + prev_input_len
     )
     # Append the tokens from the best candidate to the input sequence
-    input_ids = torch.cat(
+    # input_ids = torch.cat(
+    #     [input_ids, candidates[None, best_candidate, : accept_length + 1]], dim=-1
+    # )
+    input_ids = jt.contrib.concat(
         [input_ids, candidates[None, best_candidate, : accept_length + 1]], dim=-1
     )
     # Update the past key values based on the selected tokens

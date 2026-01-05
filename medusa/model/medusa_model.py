@@ -1,5 +1,7 @@
-import torch
-import torch.nn as nn
+# import torch
+# import torch.nn as nn
+import jittor as jt
+from jittor import nn
 from .modeling_llama_kv import LlamaForCausalLM as KVLlamaForCausalLM
 from .modeling_mistral_kv import MistralForCausalLM as KVMistralForCausalLM
 # import transformers
@@ -55,7 +57,8 @@ class ResBlock(nn.Module):
         super().__init__()
         self.linear = nn.Linear(hidden_size, hidden_size)
         # Initialize as an identity mapping
-        torch.nn.init.zeros_(self.linear.weight)
+        # torch.nn.init.zeros_(self.linear.weight)
+        nn.init.zeros_(self.linear.weight)
         # Use SiLU activation to keep consistent with the Llama model
         self.act = nn.SiLU()
 
@@ -153,7 +156,8 @@ class MedusaModelABC(nn.Module):
                 filename = medusa_head_path
             else:
                 filename = hf_hub_download(pretrained_model_name_or_path, "medusa_lm_head.pt")
-            medusa_head_state_dict = torch.load(filename, map_location=model.device)
+            # medusa_head_state_dict = torch.load(filename, map_location=model.device)
+            medusa_head_state_dict = jt.load(filename, map_location=model.device)
             model.medusa_head.load_state_dict(medusa_head_state_dict, strict=False)
             return model
         
@@ -199,7 +203,8 @@ class MedusaModelABC(nn.Module):
                 position_ids=position_ids,
                 **kwargs,
             )
-        with torch.inference_mode():
+        # with torch.inference_mode():
+        with jt.inference_mode():
             # Pass input through the base model
             outputs = self.base_model.model(
                 input_ids=input_ids,
@@ -217,8 +222,10 @@ class MedusaModelABC(nn.Module):
         for i in range(self.medusa):
             medusa_logits.append(self.medusa_head[i](hidden_states))
         if output_orig:
-            return torch.stack(medusa_logits, dim=0), outputs, orig
-        return torch.stack(medusa_logits, dim=0)
+            # return torch.stack(medusa_logits, dim=0), outputs, orig
+            return jt.stack(medusa_logits, dim=0), outputs, orig
+        # return torch.stack(medusa_logits, dim=0)
+        return jt.stack(medusa_logits, dim=0)
     def get_medusa_choice(self, model_name):
         if 'vicuna' in model_name:
             if '7b' in model_name:
