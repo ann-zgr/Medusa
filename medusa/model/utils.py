@@ -132,6 +132,9 @@ def generate_medusa_buffers(medusa_choices, device="cuda"):
     if device.startswith("cuda"):
         for k in medusa_buffers:
             medusa_buffers[k] = medusa_buffers[k].cuda()
+    if device.startswith("cuda"):
+        for k in medusa_buffers:
+            medusa_buffers[k] = medusa_buffers[k].cuda()
     return medusa_buffers
 
 
@@ -412,6 +415,7 @@ def get_nucleus_posterior_mask(logits, candidates, temperature, top_p):
         posterior_mask = (candidates[:, 1:] == sampled_tokens).int()
         return posterior_mask
     # Convert to probabilities (softmax)
+    probs = jt.nn.softmax(logits, dim=-1)
     probs = jt.nn.softmax(logits, dim=-1)
     # Sort the probabilities
     sorted_logits, sorted_indices = jt.sort(probs, descending=True)

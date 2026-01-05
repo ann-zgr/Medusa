@@ -41,7 +41,7 @@ class MedusaConfig(PretrainedConfig):
         self.medusa_num_layers = medusa_num_layers
         self.base_model_name_or_path = base_model_name_or_path
 
-class ResBlock(nn.Module):
+class ResBlock(jt.Module):
     """
     A Residual Block module.
 
@@ -57,9 +57,8 @@ class ResBlock(nn.Module):
         self.linear = nn.Linear(hidden_size, hidden_size)
         # Initialize as an identity mapping
         # torch.nn.init.zeros_(self.linear.weight)
-        nn.init.zeros_(self.linear.weight)
+        jt.init.zero_(self.linear.weight)
         # Use SiLU activation to keep consistent with the Llama model
-        self.act = nn.SiLU()
 
     def forward(self, x):
         """
@@ -71,10 +70,10 @@ class ResBlock(nn.Module):
         Returns:
             torch.Tensor: Output after the residual connection and activation.
         """
-        return x + self.act(self.linear(x))
+        return x + nn.silu(self.linear(x))
 
 
-class MedusaModelABC(nn.Module):
+class MedusaModelABC(jt.Module):
     """The Medusa Language Model Head.
 
     This module creates a series of prediction heads (based on the 'medusa' parameter)
