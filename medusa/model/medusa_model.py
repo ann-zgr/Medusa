@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+from .medusa_head_jittor import JTMedusaHead
+import jittor as jt
 from .modeling_llama_kv import LlamaForCausalLM as KVLlamaForCausalLM
 from .modeling_mistral_kv import MistralForCausalLM as KVMistralForCausalLM
 # import transformers
@@ -108,15 +110,19 @@ class MedusaModelABC(nn.Module):
         self.base_model_name_or_path = base_model_name_or_path
         self.tokenizer = AutoTokenizer.from_pretrained(self.base_model_name_or_path)
         # Create a list of Medusa heads
-        self.medusa_head = nn.ModuleList(
-            [
-                nn.Sequential(
-                    *([ResBlock(self.hidden_size)] * medusa_num_layers),
-                    nn.Linear(self.hidden_size, self.vocab_size, bias=False),
-                )
-                for _ in range(medusa_num_heads)
-            ]
-        )
+        # self.medusa_head = nn.ModuleList(
+        #     [
+        #         nn.Sequential(
+        #             *([ResBlock(self.hidden_size)] * medusa_num_layers),
+        #             nn.Linear(self.hidden_size, self.vocab_size, bias=False),
+        #         )
+        #         for _ in range(medusa_num_heads)
+        #     ]
+        # )
+        self.jt_medusa_heads = [
+            JTMedusaHead(self.hidden_size, self.vocab_size, medusa_num_layers)
+            for _ in range(medusa_num_heads)
+        ]
     # Add a link named base_model to self
     @property
     def base_model(self):
@@ -211,11 +217,23 @@ class MedusaModelABC(nn.Module):
             if output_orig:
                 orig = self.base_model.lm_head(outputs[0])
         # Clone the output hidden states
-        hidden_states = outputs[0].clone()
+        # hidden_states = outputs[0].clone()
+        # medusa_logits = []
+        # # TODO: Consider parallelizing this loop for efficiency?
+        # for i in range(self.medusa):
+        #     medusa_logits.append(self.medusa_head[i](hidden_states))
+
+        hidden_states_torch = outputs[0]
+
+        # Torch → Jittor
+        hidden_states_jt = jt.array(hidden_states_torch.detach().cpu().numpy())
+
         medusa_logits = []
-        # TODO: Consider parallelizing this loop for efficiency?
-        for i in range(self.medusa):
-            medusa_logits.append(self.medusa_head[i](hidden_states))
+        for head in self.jt_medusa_heads:
+            logits_jt = head(hidden_states_jt)
+            logits_torch = torch.from_numpy(logits_jt.numpy()).to(hidden_states_torch.device)
+            medusa_logits.append(logits_torch)
+
         if output_orig:
             return torch.stack(medusa_logits, dim=0), outputs, orig
         return torch.stack(medusa_logits, dim=0)
